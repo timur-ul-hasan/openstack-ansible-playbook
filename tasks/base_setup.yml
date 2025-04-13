@@ -1,0 +1,38 @@
+---
+- name: Update APT package index
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Install basic packages
+  apt:
+    name:
+      - git
+      - python3-pip
+      - sudo
+      - net-tools
+    state: present
+
+- name: Install OpenStack and related services
+  apt:
+    name:
+      - python3-openstackclient
+      - mariadb-server
+      - rabbitmq-server
+      - memcached
+      - etcd
+      - chrony
+      - crudini
+      - net-tools
+      - apache2
+      - libapache2-mod-wsgi-py3
+    state: present
+
+- name: Ensure MariaDB is installed again (idempotent)
+  apt:
+    name: mariadb-server
+    state: present
+
+- name: Ensure PyMySQL is installed for Ansible MySQL modules
+  pip:
+    name: PyMySQL
