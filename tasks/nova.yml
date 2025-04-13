@@ -2,94 +2,125 @@
 - name: Include base setup tasks
   ansible.builtin.import_tasks: tasks/base_setup.yml
 
-- name: Ensure 'keystone' database exists (via Unix socket with sudo)
-  community.mysql.mysql_db:
-    name: keystone
-    state: present
-    login_unix_socket: /var/run/mysqld/mysqld.sock
+- name: Create virtualenv for Nova with system site packages
+  ansible.builtin.command: python3 -m virtualenv --system-site-packages nova_env
+  args:
+    chdir: /home/vagrant
+  become: false
 
-- name: Create 'keystone'@'localhost' user with full privileges
-  community.mysql.mysql_user:
-    name: keystone
-    host: localhost
-    password: "KEYSTONE_DBPASS"
-    priv: "keystone.*:ALL"
-    state: present
-    login_unix_socket: /var/run/mysqld/mysqld.sock
+- name: Debug nova virtualenv activate location
+  ansible.builtin.debug:
+    msg: "To activate the nova virtualenv, run: source /home/vagrant/nova_env/bin/activate"
+  become: false
 
-- name: Create 'keystone'@'%' user with full privileges
-  community.mysql.mysql_user:
-    name: keystone
-    host: "%"
-    password: "KEYSTONE_DBPASS"
-    priv: "keystone.*:ALL"
-    state: present
-    login_unix_socket: /var/run/mysqld/mysqld.sock
-- name: Install Keystone
-  apt:
-    name: keystone
-    state: present
-
-- name: Set Keystone database connection string
-  ansible.builtin.ini_file:
-    path: /etc/keystone/keystone.conf
-    section: database
-    option: connection
-    value: "mysql+pymysql://keystone:KEYSTONE_DBPASS@controller/keystone"
-    mode: '0640'
-    backup: yes
-
-- name: Set Keystone token provider to fernet
-  ansible.builtin.ini_file:
-    path: /etc/keystone/keystone.conf
-    section: token
-    option: provider
-    value: "fernet"
-    mode: '0640'
-    backup: yes
-
-- name: Run keystone-manage db_sync using sudo
-  ansible.builtin.command: sudo keystone-manage db_sync
-  become: true
-
-- name: Initialize Fernet key repositories
+- name: Run Python command inside nova virtualenv
   ansible.builtin.shell: |
-    sudo keystone-manage fernet_setup --keystone-user keystone --keystone-group keystone
-    sudo keystone-manage credential_setup --keystone-user keystone --keystone-group keystone
+    source /home/vagrant/nova_env/bin/activate
+    python --version
+  args:
+    executable: /bin/bash
+  become: false
+
+- name: Clone nova repository
+  ansible.builtin.git:
+    repo: "{{ nova_repo }}"
+    dest: "{{ nova_clone_dest }}"
+    version: master
+  become: false
+
+- name: Clone python-novaclient repository
+  ansible.builtin.git:
+    repo: "{{ novaclient_repo }}"
+    dest: "{{ novaclient_clone_dest }}"
+    version: master
+  become: false
+
+- name: Install Nova requirements into virtualenv
+  ansible.builtin.pip:
+    requirements:
+      - "{{ nova_clone_dest }}/requirements.txt"
+      - "{{ nova_clone_dest }}/test-requirements.txt"
+    virtualenv: "{{ nova_virtualenv }}"
+    virtualenv_command: python3 -m virtualenv
+    virtualenv_site_packages: yes
+  become: false
+
+- name: Install Nova service (editable mode)
+  ansible.builtin.pip:
+    name: "{{ nova_clone_dest }}"
+    editable: true
+    executable: pip3
   become: true
 
-- name: Bootstrap the Keystone service
+- name: Install Nova client (editable mode)
+  ansible.builtin.pip:
+    name: "{{ novaclient_clone_dest }}"
+    editable: true
+    executable: pip3
+  become: true
+
+- name: Create nova user in service project
   ansible.builtin.shell: |
-    sudo keystone-manage bootstrap \
-      --bootstrap-password ADMIN_PASS \
-      --bootstrap-admin-url http://controller:35357/v3/ \
-      --bootstrap-internal-url http://controller:5000/v3/ \
-      --bootstrap-public-url http://controller:5000/v3/ \
-      --bootstrap-region-id RegionOne
+    source /root/admin-openrc
+    openstack user create nova --project service --password '{{ nova_password }}'
+  args:
+    executable: /bin/bash
   become: true
 
-- name: Ensure 'ServerName controller' is set in apache2.conf
-  ansible.builtin.lineinfile:
-    path: /etc/apache2/apache2.conf
-    line: ServerName controller
-    insertafter: EOF
-    state: present
+- name: Assign admin role to nova user in service project
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack role add --user nova --project service admin
+  args:
+    executable: /bin/bash
   become: true
 
-- name: Restart Apache2 service
-  ansible.builtin.service:
-    name: apache2
-    state: restarted
+- name: Register Nova service in Keystone
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack service create --name nova --description "OpenStack Compute" compute
+  args:
+    executable: /bin/bash
   become: true
 
-- name: Example command using OpenStack admin credentials
-  ansible.builtin.shell: openstack user list
+- name: Create Nova public endpoint
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack endpoint create --region RegionOne compute public \
+      http://{{ nova_api_host }}:8774/v2.1
+  args:
+    executable: /bin/bash
   become: true
-  environment:
-    OS_USERNAME: admin
-    OS_PASSWORD: ADMIN_PASS
-    OS_PROJECT_NAME: admin
-    OS_USER_DOMAIN_NAME: Default
-    OS_PROJECT_DOMAIN_NAME: Default
-    OS_AUTH_URL: http://controller:35357/v3
-    OS_IDENTITY_API_VERSION: "3"
+
+- name: Create Nova admin endpoint
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack endpoint create --region RegionOne compute admin \
+      http://{{ nova_api_host }}:8774/v2.1
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Create Nova internal endpoint
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack endpoint create --region RegionOne compute internal \
+      http://{{ nova_api_host }}:8774/v2.1
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Run nova-manage api_db sync
+  ansible.builtin.command: nova-manage api_db sync
+  become: true
+
+- name: Run nova-manage cell_v2 map_cell0
+  ansible.builtin.command: nova-manage cell_v2 map_cell0
+  become: true
+
+- name: Create nova cell for cell1 (if not already created)
+  ansible.builtin.shell: |
+    nova-manage cell_v2 create_cell --name cell1 || true
+  args:
+    executable: /bin/bash
+  become: true
