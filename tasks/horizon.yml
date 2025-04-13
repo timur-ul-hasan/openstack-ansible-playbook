@@ -1,0 +1,55 @@
+---
+- name: Setup Horizon Dashboard
+  hosts: controller
+  become: true
+  vars:
+    # Customize these variables as needed
+    openstack_host: "controller"      # Set this to your OpenStack API host if different
+    horizon_debug: false              # Set to true if you need debug mode; otherwise false
+    horizon_timezone: "UTC"           # Change to your preferred timezone
+
+  tasks:
+    - name: Install Horizon and memcached packages
+      ansible.builtin.apt:
+        name:
+          - openstack-dashboard
+          - memcached
+        update_cache: yes
+        state: present
+
+    - name: Deploy Horizon configuration (local_settings.py)
+      ansible.builtin.copy:
+        dest: /etc/openstack-dashboard/local_settings.py
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          # -*- coding: utf-8 -*-
+          """
+          Local settings for OpenStack Dashboard (Horizon)
+          """
+          from openstack_dashboard.settings import *
+          
+          DEBUG = {{ horizon_debug | lower }}
+          WEBROOT = '/'
+          ALLOWED_HOSTS = ['*']
+          OPENSTACK_HOST = "{{ openstack_host }}"
+          
+          # Session & cache settings
+          SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+          CACHES = {
+              'default': {
+                  'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
+                  'LOCATION': '127.0.0.1:11211',
+              }
+          }
+          
+          # Timezone configuration
+          TIME_ZONE = "{{ horizon_timezone }}"
+          
+          # Additional settings can be added below as necessary...
+          
+    - name: Restart Apache2 to apply Horizon configuration
+      ansible.builtin.service:
+        name: apache2
+        state: restarted
