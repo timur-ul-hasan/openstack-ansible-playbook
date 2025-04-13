@@ -1,0 +1,60 @@
+---
+- name: Install Swift and required packages
+  ansible.builtin.apt:
+    name:
+      - swift
+      - swift-proxy
+      - swift-account
+      - swift-container
+      - swift-object
+    state: present
+    update_cache: yes
+  become: true
+
+- name: Create swift user in service project
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack user create swift --project service --password '{{ swift_password }}'
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Assign admin role to swift user in service project
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack role add --user swift --project service admin
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Register Swift service in Keystone
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack service create --name swift --description "OpenStack Object Storage" object-store
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Create Swift public endpoint
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack endpoint create --region RegionOne object-store public http://{{ swift_api_host }}:8080/v1/AUTH_
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Create Swift internal endpoint
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack endpoint create --region RegionOne object-store internal http://{{ swift_api_host }}:8080/v1/AUTH_
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Create Swift admin endpoint
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack endpoint create --region RegionOne object-store admin http://{{ swift_api_host }}:8080/v1
+  args:
+    executable: /bin/bash
+  become: true
