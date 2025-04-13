@@ -1,0 +1,68 @@
+---
+- name: Install Ceilometer packages
+  ansible.builtin.apt:
+    name:
+      - ceilometer-api
+      - ceilometer-collector
+      - ceilometer-agent-central
+      - ceilometer-agent-notification
+      - python3-ceilometerclient
+    state: present
+    update_cache: yes
+  become: true
+
+- name: Create Ceilometer user in the service project
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack user create ceilometer --project service --password '{{ ceilometer_password }}'
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Assign admin role to ceilometer user in the service project
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack role add --user ceilometer --project service admin
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Register Ceilometer service in Keystone
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack service create --name ceilometer --description "Telemetry" metering
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Create Ceilometer public endpoint
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack endpoint create --region RegionOne metering public http://{{ ceilometer_api_host }}:8777
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Create Ceilometer admin endpoint
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack endpoint create --region RegionOne metering admin http://{{ ceilometer_api_host }}:8777
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Create Ceilometer internal endpoint
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack endpoint create --region RegionOne metering internal http://{{ ceilometer_api_host }}:8777
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Run Ceilometer database synchronization
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    ceilometer-dbsync
+  args:
+    executable: /bin/bash
+  become: true

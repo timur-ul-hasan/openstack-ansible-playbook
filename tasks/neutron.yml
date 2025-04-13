@@ -1,0 +1,61 @@
+---
+- name: Install Neutron packages
+  ansible.builtin.apt:
+    name:
+      - neutron-server
+      - neutron-plugin-ml2
+      - neutron-linuxbridge-agent
+      - neutron-dhcp-agent
+      - neutron-metadata-agent
+      - iptables
+    state: present
+    update_cache: yes
+  become: true
+
+- name: Create neutron user in the service project
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack user create neutron --project service --password '{{ neutron_password }}'
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Assign admin role to neutron user in the service project
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack role add --user neutron --project service admin
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Register Neutron service in Keystone
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack service create --name neutron --description "OpenStack Networking" network
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Create Neutron public endpoint
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack endpoint create --region RegionOne network public http://{{ neutron_api_host }}:9696
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Create Neutron admin endpoint
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack endpoint create --region RegionOne network admin http://{{ neutron_api_host }}:9696
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Create Neutron internal endpoint
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack endpoint create --region RegionOne network internal http://{{ neutron_api_host }}:9696
+  args:
+    executable: /bin/bash
+  become: true

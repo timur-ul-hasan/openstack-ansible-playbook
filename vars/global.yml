@@ -12,11 +12,11 @@ os_project_domain_name: Default
 os_auth_url: http://controller:35357/v3
 os_identity_api_version: 3
 
-# Server name
+# Server Configuration
 server_name: controller
 trove_api_host: 192.168.56.100  
 
-
+# Trove database configuration
 trove_auth_url: http://controller:5000/v3
 trove_username: admin
 trove_password: MySecureTrovePass
@@ -25,3 +25,16 @@ trove_project_name: admin
 trove_project_domain: default
 trove_region_name: RegionOne
 trove_conf_path: /etc/trove/trove.conf
+
+# Nova configuration
+nova_password: "YOUR_NOVA_PASSWORD"
+nova_api_host: "controller"    
+nova_virtualenv: "/home/vagrant/nova_env"
+nova_repo: "https://opendev.org/openstack/nova.git"
+novaclient_repo: "https://opendev.org/openstack/python-novaclient.git"
+nova_clone_dest: "/home/vagrant/nova"
+novaclient_clone_dest: "/home/vagrant/python-novaclient"
+
+# Swift configuration
+swift_password: "YOUR_SWIFT_PASSWORD"
+swift_api_host: "controller"  # Replace with your public API host if different
