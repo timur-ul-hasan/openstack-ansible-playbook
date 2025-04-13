@@ -12,7 +12,7 @@
   community.mysql.mysql_user:
     name: keystone
     host: localhost
-    password: "KEYSTONE_DBPASS"
+    password: "{{ keystone_db_password }}"
     priv: "keystone.*:ALL"
     state: present
     login_unix_socket: /var/run/mysqld/mysqld.sock
@@ -21,7 +21,7 @@
   community.mysql.mysql_user:
     name: keystone
     host: "%"
-    password: "KEYSTONE_DBPASS"
+    password: "{{ keystone_db_password }}"
     priv: "keystone.*:ALL"
     state: present
     login_unix_socket: /var/run/mysqld/mysqld.sock
@@ -35,7 +35,7 @@
     path: /etc/keystone/keystone.conf
     section: database
     option: connection
-    value: "mysql+pymysql://keystone:KEYSTONE_DBPASS@controller/keystone"
+    value: "mysql+pymysql://keystone:{{ keystone_db_password }}@controller/keystone"
     mode: '0640'
     backup: yes
 
@@ -61,17 +61,17 @@
 - name: Bootstrap the Keystone service
   ansible.builtin.shell: |
     sudo keystone-manage bootstrap \
-      --bootstrap-password ADMIN_PASS \
-      --bootstrap-admin-url http://controller:35357/v3/ \
-      --bootstrap-internal-url http://controller:5000/v3/ \
-      --bootstrap-public-url http://controller:5000/v3/ \
+      --bootstrap-password {{ os_admin_password }} \
+      --bootstrap-admin-url http://{{ server_name }}:35357/v3/ \
+      --bootstrap-internal-url http://{{ server_name }}:5000/v3/ \
+      --bootstrap-public-url http://{{ server_name }}:5000/v3/ \
       --bootstrap-region-id RegionOne
   become: true
 
 - name: Ensure 'ServerName controller' is set in apache2.conf
   ansible.builtin.lineinfile:
     path: /etc/apache2/apache2.conf
-    line: ServerName controller
+    line: "ServerName {{ server_name }}"
     insertafter: EOF
     state: present
   become: true
@@ -83,13 +83,13 @@
   become: true
 
 - name: Example command using OpenStack admin credentials
-  ansible.builtin.shell: openstack user list
+  ansible.builtin.shell: openstack service list
   become: true
   environment:
-    OS_USERNAME: admin
-    OS_PASSWORD: ADMIN_PASS
-    OS_PROJECT_NAME: admin
-    OS_USER_DOMAIN_NAME: Default
-    OS_PROJECT_DOMAIN_NAME: Default
-    OS_AUTH_URL: http://controller:35357/v3
-    OS_IDENTITY_API_VERSION: "3"
+    OS_USERNAME: "{{ os_admin_user }}"
+    OS_PASSWORD: "{{ os_admin_password }}"
+    OS_PROJECT_NAME: "{{ os_project_name }}"
+    OS_USER_DOMAIN_NAME: "{{ os_user_domain_name }}"
+    OS_PROJECT_DOMAIN_NAME: "{{ os_project_domain_name }}"
+    OS_AUTH_URL: "{{ os_auth_url }}"
+    OS_IDENTITY_API_VERSION: "{{ os_identity_api_version }}"
