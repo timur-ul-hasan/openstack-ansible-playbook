@@ -1,0 +1,132 @@
+---
+- name: Include base setup tasks
+  ansible.builtin.import_tasks: tasks/base_setup.yml
+
+- name: Create virtualenv with system site packages
+  ansible.builtin.command: python3 -m virtualenv --system-site-packages trove_env
+  args:
+    chdir: /home/vagrant
+  become: false
+
+- name: Debug virtualenv activate location
+  debug:
+    msg: "To activate: source /home/vagrant/trove_env/bin/activate"
+
+- name: Run Python command inside virtualenv
+  ansible.builtin.shell: |
+    source /home/vagrant/trove_env/bin/activate
+    python --version
+  args:
+    executable: /bin/bash
+  become: false
+
+- name: Clone trove repository
+  ansible.builtin.git:
+    repo: https://opendev.org/openstack/trove.git
+    dest: /home/vagrant/trove
+    version: master
+  become: false
+
+- name: Clone python-troveclient repository
+  ansible.builtin.git:
+    repo: https://opendev.org/openstack/python-troveclient.git
+    dest: /home/vagrant/python-troveclient
+    version: master
+  become: false
+
+- name: Install Trove requirements into virtualenv
+  ansible.builtin.pip:
+    requirements: 
+      - /home/vagrant/trove/requirements.txt
+      - /home/vagrant/trove/test-requirements.txt
+    virtualenv: /home/vagrant/trove_env
+    virtualenv_command: python3 -m virtualenv
+    virtualenv_site_packages: yes
+  become: false
+
+- name: Install Trove service (editable mode)
+  ansible.builtin.pip:
+    name: /home/vagrant/trove
+    editable: true
+    executable: pip3
+  become: true
+
+- name: Install Trove client (editable mode)
+  ansible.builtin.pip:
+    name: /home/vagrant/python-troveclient
+    editable: true
+    executable: pip3
+  become: true
+
+- name: Create trove user in service project
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack user create trove --project service --password '{{ trove_password }}'
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Assign admin role to trove user in service project
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack role add --user trove --project service admin
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Register Trove service in Keystone
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack service create --name trove --description "Database" database
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Create Trove public endpoint
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack endpoint create --region RegionOne database public \
+      http://{{ trove_api_host }}:8779/v1.0/\$(tenant_id)s
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Create Trove admin endpoint
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack endpoint create --region RegionOne database admin \
+      http://{{ trove_api_host }}:8779/v1.0/\$(tenant_id)s
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Create Trove internal endpoint
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack endpoint create --region RegionOne database internal \
+      http://{{ trove_api_host }}:8779/v1.0/\$(tenant_id)s
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Set Trove service credentials in trove.conf
+  ansible.builtin.ini_file:
+    path: "{{ trove_conf_path }}"
+    section: service_credentials
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    mode: '0640'
+    backup: yes
+  loop:
+    - { option: "auth_url", value: "{{ trove_auth_url }}" }
+    - { option: "username", value: "{{ trove_username }}" }
+    - { option: "password", value: "{{ trove_password }}" }
+    - { option: "user_domain_name", value: "{{ trove_user_domain }}" }
+    - { option: "project_name", value: "{{ trove_project_name }}" }
+    - { option: "project_domain_name", value: "{{ trove_project_domain }}" }
+    - { option: "region_name", value: "{{ trove_region_name }}" }
+  become: true
+
+- name: Run trove-manage db_sync
+  ansible.builtin.command: trove-manage db_sync
+  become: true
