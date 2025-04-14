@@ -22,7 +22,6 @@ pip install ansible
 ansible-playbook -i inventory.ini setup_openstack.yml
 
 
-
 # For password based authentication, you can use the `--ask-pass` option[Not recommended for production]:
 ```bash
 ansible-playbook -i inventory.ini setup_openstack.yml --ask-pass --ask-become-pass

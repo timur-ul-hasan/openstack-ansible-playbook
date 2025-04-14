@@ -9,20 +9,25 @@
   tasks:
     - import_tasks: tasks/base_setup.yml
 
-    - name: Setup Keystone
-      import_tasks: tasks/keystone.yml
+    # - name: Setup Keystone
+    #   import_tasks: tasks/keystone.yml
 
-    - name: Setup Nova
-      import_tasks: tasks/nova.yml
+    # service_project.yml
 
-    - name: Setup Swift
-      import_tasks: tasks/swift.yml
+    - name: Setup Service Project
+      import_tasks: tasks/service_project.yml
+
+    # - name: Setup Nova
+    #   import_tasks: tasks/nova.yml
+
+    # - name: Setup Swift
+    #   import_tasks: tasks/swift.yml
 
     - name: Setup Trove
       import_tasks: tasks/trove.yml
     
-    - name: Setup Ceilometer
-      import_tasks: tasks/ceilometer.yml
+    # - name: Setup Ceilometer
+    #   import_tasks: tasks/ceilometer.yml
     
-    - name: Setup Neutron
-      import_tasks: tasks/neutron.yml
+    # - name: Setup Neutron
+    #   import_tasks: tasks/neutron.yml

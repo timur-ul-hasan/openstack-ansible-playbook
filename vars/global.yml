@@ -1,7 +1,13 @@
+# Service specific variables
+home_dir: /home/user
+private_ip: 192.168.18.100
+state_public_ip: 154.192.156.8
+
 # Keystone DB configuration
 keystone_db_name: keystone
 keystone_db_user: keystone
 keystone_db_password: KEYSTONE_DBPASS
+
 
 # General OpenStack environment
 os_admin_user: admin
@@ -9,14 +15,20 @@ os_admin_password: ADMIN_PASS
 os_project_name: admin
 os_user_domain_name: Default
 os_project_domain_name: Default
+os_service_project_name: service
 os_auth_url: http://controller:5000/v3
 os_identity_api_version: 3
+os_region_name: RegionOne
+os_interface: public
+os_image_api_version: 2
 
 # Server Configuration
 server_name: controller
-trove_api_host: 192.168.56.100  
+
+ 
 
 # Trove database configuration
+trove_api_host: controller 
 trove_auth_url: http://controller:5000/v3
 trove_username: admin
 trove_password: MySecureTrovePass
@@ -25,15 +37,16 @@ trove_project_name: admin
 trove_project_domain: default
 trove_region_name: RegionOne
 trove_conf_path: /etc/trove/trove.conf
+trove_folder: python-troveclient
 
 # Nova configuration
 nova_password: "YOUR_NOVA_PASSWORD"
 nova_api_host: "controller"    
-nova_virtualenv: "/home/vagrant/nova_env"
+nova_virtualenv: "{{ home_dir }}/nova_env"
 nova_repo: "https://opendev.org/openstack/nova.git"
 novaclient_repo: "https://opendev.org/openstack/python-novaclient.git"
-nova_clone_dest: "/home/vagrant/nova"
-novaclient_clone_dest: "/home/vagrant/python-novaclient"
+nova_clone_dest: "{{ home_dir }}/nova"
+novaclient_clone_dest: "{{ home_dir }}/python-novaclient"
 
 # Swift configuration
 swift_password: "YOUR_SWIFT_PASSWORD"
