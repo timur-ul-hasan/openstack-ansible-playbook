@@ -32,11 +32,18 @@
   when: not nova_repo_check.stat.exists
   become: false
 
+- name: Check if python-novaclient 
+  ansible.builtin.stat:
+    path: "{{ novaclient_repo }}/.git"
+  register: novaclient_repo_check
+
 - name: Clone python-novaclient repository
   ansible.builtin.git:
     repo: "{{ novaclient_repo }}"
     dest: "{{ novaclient_clone_dest }}"
     version: master
+    update: no
+  when: not novaclient_repo_check.stat.exists
   become: false
 
 - name: Install Nova requirements into virtualenv
