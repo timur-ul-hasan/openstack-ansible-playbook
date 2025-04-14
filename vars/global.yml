@@ -37,4 +37,4 @@ novaclient_clone_dest: "/home/vagrant/python-novaclient"
 
 # Swift configuration
 swift_password: "YOUR_SWIFT_PASSWORD"
-swift_api_host: "controller"  # Replace with your public API host if different
+swift_api_host: "controller" 
