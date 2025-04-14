@@ -93,3 +93,4 @@
     OS_PROJECT_DOMAIN_NAME: "{{ os_project_domain_name }}"
     OS_AUTH_URL: "{{ os_auth_url }}"
     OS_IDENTITY_API_VERSION: "{{ os_identity_api_version }}"
+    OS_REGION_NAME: "RegionOne"

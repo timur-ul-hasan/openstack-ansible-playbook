@@ -103,3 +103,12 @@
     state: present
     update_cache: yes
   become: true
+
+
+- name: Add controller entry in /etc/hosts
+  lineinfile:
+    path: /etc/hosts
+    regexp: '^0\.0\.0\.0\s+controller\b'
+    line: '0.0.0.0 controller'
+    state: present
+  become: true
