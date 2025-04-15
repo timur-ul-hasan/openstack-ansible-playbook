@@ -54,7 +54,7 @@
     virtualenv_command: python3 -m virtualenv
     virtualenv_site_packages: yes
   become: false
-  
+
 - name: Install Trove service (editable mode)
   ansible.builtin.pip:
     name: "{{ home_dir }}/{{ trove_folder }}"
@@ -126,7 +126,6 @@
   when: trove_service_check.rc != 0
   become: true
 
-
 - name: Check if Trove public endpoint exists
   ansible.builtin.shell: |
     source /root/admin-openrc
@@ -196,7 +195,7 @@
     section: service_credentials
     option: "{{ item.option }}"
     value: "{{ item.value }}"
-    mode: '0640'
+    mode: "0640"
     backup: yes
   loop:
     - { option: "auth_url", value: "{{ trove_auth_url }}" }

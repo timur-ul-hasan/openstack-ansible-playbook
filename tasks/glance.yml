@@ -1,0 +1,202 @@
+---
+# 1. Ensure the 'glance' database exists
+- name: Ensure 'glance' database exists (via Unix socket with sudo)
+  community.mysql.mysql_db:
+    name: glance
+    state: present
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+
+# 2. Create 'glance'@'localhost' user with full privileges
+- name: Create 'glance'@'localhost' user with full privileges
+  community.mysql.mysql_user:
+    name: glance
+    host: localhost
+    password: "{{ glance_db_password }}"
+    priv: "glance.*:ALL"
+    state: present
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+
+# 3. Create 'glance'@'%' user with full privileges
+- name: Create 'glance'@'%' user with full privileges
+  community.mysql.mysql_user:
+    name: glance
+    host: "%"
+    password: "{{ glance_db_password }}"
+    priv: "glance.*:ALL"
+    state: present
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+
+# 4. Install Glance
+- name: Install Glance packages
+  apt:
+    name: glance
+    state: present
+
+# 5. Configure glance-api.conf: database connection
+- name: Configure Glance database connection
+  ansible.builtin.ini_file:
+    path: /etc/glance/glance-api.conf
+    section: database
+    option: connection
+    value: "mysql+pymysql://glance:{{ glance_db_password }}@controller/glance"
+    backup: yes
+
+# 6. Configure glance-api.conf: Keystone authentication
+- name: Configure Glance Keystone auth in glance-api.conf
+  ansible.builtin.ini_file:
+    path: /etc/glance/glance-api.conf
+    section: keystone_authtoken
+    option: www_authenticate_uri
+    value: "http://controller:5000"
+    backup: yes
+
+- name: Configure Glance auth_url
+  ansible.builtin.ini_file:
+    path: /etc/glance/glance-api.conf
+    section: keystone_authtoken
+    option: auth_url
+    value: "http://controller:5000"
+    backup: yes
+
+- name: Configure Glance memcached servers
+  ansible.builtin.ini_file:
+    path: /etc/glance/glance-api.conf
+    section: keystone_authtoken
+    option: memcached_servers
+    value: "controller:11211"
+    backup: yes
+
+- name: Configure Glance auth_type and service project
+  ansible.builtin.ini_file:
+    path: /etc/glance/glance-api.conf
+    section: keystone_authtoken
+    option: auth_type
+    value: "password"
+    backup: yes
+
+- name: Configure Glance project and user domains
+  ansible.builtin.ini_file:
+    path: /etc/glance/glance-api.conf
+    section: keystone_authtoken
+    option: project_domain_name
+    value: "Default"
+    backup: yes
+
+- name: Configure Glance user credentials
+  ansible.builtin.ini_file:
+    path: /etc/glance/glance-api.conf
+    section: keystone_authtoken
+    option: username
+    value: "glance"
+    backup: yes
+
+- name: Configure Glance user password
+  ansible.builtin.ini_file:
+    path: /etc/glance/glance-api.conf
+    section: keystone_authtoken
+    option: password
+    value: "{{ glance_service_password }}"
+    backup: yes
+
+# 7. Configure glance-api.conf: paste_deploy flavor
+- name: Configure Glance paste_deploy flavor
+  ansible.builtin.ini_file:
+    path: /etc/glance/glance-api.conf
+    section: paste_deploy
+    option: flavor
+    value: "keystone"
+    backup: yes
+
+# 8. Configure glance-api.conf: filesystem store
+- name: Configure Glance filesystem store backend
+  ansible.builtin.ini_file:
+    path: /etc/glance/glance-api.conf
+    section: DEFAULT
+    option: enabled_backends
+    value: "fs:file"
+    backup: yes
+
+- name: Configure Glance default backend
+  ansible.builtin.ini_file:
+    path: /etc/glance/glance-api.conf
+    section: glance_store
+    option: default_backend
+    value: "fs"
+    backup: yes
+
+- name: Configure Glance filesystem data directory
+  ansible.builtin.ini_file:
+    path: /etc/glance/glance-api.conf
+    section: fs
+    option: filesystem_store_datadir
+    value: "/var/lib/glance/images/"
+    backup: yes
+
+# 9. Configure glance-api.conf: oslo_limit for Keystone quotas
+- name: Configure Glance unified limits (oslo_limit)
+  ansible.builtin.ini_file:
+    path: /etc/glance/glance-api.conf
+    section: oslo_limit
+    option: auth_url
+    value: "http://controller:5000"
+    backup: yes
+
+- name: Configure Glance oslo_limit auth_type
+  ansible.builtin.ini_file:
+    path: /etc/glance/glance-api.conf
+    section: oslo_limit
+    option: auth_type
+    value: "password"
+    backup: yes
+
+- name: Configure Glance oslo_limit credentials
+  ansible.builtin.ini_file:
+    path: /etc/glance/glance-api.conf
+    section: oslo_limit
+    option: username
+    value: "glance"
+    backup: yes
+
+- name: Configure Glance oslo_limit password
+  ansible.builtin.ini_file:
+    path: /etc/glance/glance-api.conf
+    section: oslo_limit
+    option: password
+    value: "{{ glance_service_password }}"
+    backup: yes
+
+- name: Configure Glance oslo_limit system scope
+  ansible.builtin.ini_file:
+    path: /etc/glance/glance-api.conf
+    section: oslo_limit
+    option: system_scope
+    value: "all"
+    backup: yes
+
+- name: Configure Glance oslo_limit endpoint ID
+  ansible.builtin.ini_file:
+    path: /etc/glance/glance-api.conf
+    section: oslo_limit
+    option: endpoint_id
+    value: "{{ glance_endpoint_id }}"
+    backup: yes
+
+- name: Enable per-tenant quotas in glance-api.conf
+  ansible.builtin.ini_file:
+    path: /etc/glance/glance-api.conf
+    section: DEFAULT
+    option: use_keystone_limits
+    value: "True"
+    backup: yes
+
+- name: Populate the Glance database
+  become: true
+  become_user: glance
+  ansible.builtin.shell: "glance-manage db_sync"
+
+# 11. Restart the Glance API service
+- name: Restart glance-api service
+  ansible.builtin.service:
+    name: glance-api
+    state: restarted
+  become: true

@@ -1,7 +1,4 @@
 ---
-- name: Include base setup tasks
-  ansible.builtin.import_tasks: tasks/base_setup.yml
-
 - name: Ensure 'keystone' database exists (via Unix socket with sudo)
   community.mysql.mysql_db:
     name: keystone
@@ -82,15 +79,3 @@
     state: restarted
   become: true
 
-- name: Example command using OpenStack admin credentials
-  ansible.builtin.shell: openstack service list
-  become: true
-  environment:
-    OS_USERNAME: "{{ os_admin_user }}"
-    OS_PASSWORD: "{{ os_admin_password }}"
-    OS_PROJECT_NAME: "{{ os_project_name }}"
-    OS_USER_DOMAIN_NAME: "{{ os_user_domain_name }}"
-    OS_PROJECT_DOMAIN_NAME: "{{ os_project_domain_name }}"
-    OS_AUTH_URL: "{{ os_auth_url }}"
-    OS_IDENTITY_API_VERSION: "{{ os_identity_api_version }}"
-    OS_REGION_NAME: "RegionOne"

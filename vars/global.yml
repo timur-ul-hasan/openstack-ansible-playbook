@@ -25,8 +25,6 @@ os_image_api_version: 2
 # Server Configuration
 server_name: controller
 
- 
-
 # Trove database configuration
 trove_api_host: controller 
 trove_auth_url: http://controller:5000/v3
@@ -51,3 +49,27 @@ novaclient_clone_dest: "{{ home_dir }}/python-novaclient"
 # Swift configuration
 swift_password: "YOUR_SWIFT_PASSWORD"
 swift_api_host: "controller" 
+
+
+# horizon configuration
+
+openstack_host: controller
+horizon_timezone: UTC
+horizon_debug: false
+
+# neutron configuration
+neutron_password: "NEUTRON_PASSWORD"
+neutron_api_host: "controller"
+
+
+# celometer configuration
+ceilometer_password: "CEILOMETER_PASSWORD"
+ceilometer_api_host: "controller"
+
+
+
+# Glance configuration
+glance_db_password: "GLANCE_DBPASS"
+glance_service_password: "GLANCE_PASS"
+glance_api_host: "controller"
+glance_endpoint_id: "http://controller:9292"

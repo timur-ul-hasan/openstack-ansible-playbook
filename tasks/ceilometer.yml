@@ -2,11 +2,8 @@
 - name: Install Ceilometer packages
   ansible.builtin.apt:
     name:
-      - ceilometer-api
-      - ceilometer-collector
       - ceilometer-agent-central
       - ceilometer-agent-notification
-      - python3-ceilometerclient
     state: present
     update_cache: yes
   become: true

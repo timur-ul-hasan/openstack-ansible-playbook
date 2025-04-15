@@ -34,10 +34,18 @@
           }
       }
       
+      OPENSTACK_API_VERSIONS = {
+          "identity": 3,
+          "image": 2,
+          "volume": 3,
+      }
+
+
       # Timezone configuration
       TIME_ZONE = "{{ horizon_timezone }}"
       
       # Additional settings can be added below as necessary...
+
       
 - name: Restart Apache2 to apply Horizon configuration
   ansible.builtin.service:

@@ -1,0 +1,84 @@
+---
+- name: Ensure placement database exists
+  community.mysql.mysql_db:
+    name: placement
+    state: present
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+
+- name: Create placement@localhost user
+  community.mysql.mysql_user:
+    name: placement
+    host: localhost
+    password: "{{ placement_db_password }}"
+    priv: "placement.*:ALL"
+    state: present
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+
+- name: Create placement@'%' user
+  community.mysql.mysql_user:
+    name: placement
+    host: "%"
+    password: "{{ placement_db_password }}"
+    priv: "placement.*:ALL"
+    state: present
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+
+- name: Source admin credentials and create Placement user
+  ansible.builtin.shell: |
+    . /root/admin-openrc
+    openstack user create --domain default --password {{ placement_service_password }} placement
+    openstack role add --project service --user placement admin
+    openstack service create --name placement --description "Placement API" placement
+    openstack endpoint create --region RegionOne placement public http://controller:8778
+    openstack endpoint create --region RegionOne placement internal http://controller:8778
+    openstack endpoint create --region RegionOne placement admin http://controller:8778
+
+- name: Install placement-api and CLI plugin
+  apt:
+    name:
+      - placement-api
+      - python3-osc-placement
+    state: present
+    update_cache: yes
+
+- name: Configure placement.conf database
+  ini_file:
+    path: /etc/placement/placement.conf
+    section: placement_database
+    option: connection
+    value: "mysql+pymysql://placement:{{ placement_db_password }}@controller/placement"
+    backup: yes
+
+- name: Configure placement.conf API auth
+  ini_file:
+    path: /etc/placement/placement.conf
+    section: api
+    option: auth_strategy
+    value: keystone
+    backup: yes
+
+- name: Configure placement.conf Keystone auth token
+  ini_file:
+    path: /etc/placement/placement.conf
+    section: keystone_authtoken
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    backup: yes
+  loop:
+    - { option: auth_url,            value: "http://controller:5000/v3" }
+    - { option: memcached_servers,   value: "controller:11211" }
+    - { option: auth_type,           value: password }
+    - { option: project_domain_name, value: Default }
+    - { option: user_domain_name,    value: Default }
+    - { option: project_name,        value: service }
+    - { option: username,            value: placement }
+    - { option: password,            value: "{{ placement_service_password }}" }
+
+- name: Populate the placement database
+  become_user: placement
+  shell: placement-manage db sync
+
+- name: Restart Apache2
+  service:
+    name: apache2
+    state: restarted

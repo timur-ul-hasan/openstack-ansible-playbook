@@ -23,12 +23,11 @@
     path: "{{ nova_clone_dest }}/.git"
   register: nova_repo_check
 
-- name: Clone nova repository (only if not already present)
+- name: Clone nova repository (only if not already present, shallow)
   ansible.builtin.git:
     repo: "{{ nova_repo }}"
     dest: "{{ nova_clone_dest }}"
     version: master
-    update: no
   when: not nova_repo_check.stat.exists
   become: false
 
@@ -42,8 +41,18 @@
     repo: "{{ novaclient_repo }}"
     dest: "{{ novaclient_clone_dest }}"
     version: master
-    update: no
   when: not novaclient_repo_check.stat.exists
+  become: false
+
+- name: Upgrade pip, setuptools, and packaging in venv
+  ansible.builtin.pip:
+    name:
+      - pip
+      - setuptools
+      - packaging
+    state: latest
+    virtualenv: "{{ nova_virtualenv }}"
+    virtualenv_command: python3 -m venv
   become: false
 
 - name: Install Nova requirements into virtualenv

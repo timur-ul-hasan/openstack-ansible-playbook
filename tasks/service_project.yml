@@ -19,22 +19,5 @@
   become: true
 
 
-- name: Check if the default project already exists
-  ansible.builtin.shell: |
-    source /root/admin-openrc
-    openstack project show {{ os_service_project_name }}
-  register: service_project_check
-  failed_when: false
-  changed_when: false
-  args:
-    executable: /bin/bash
-  become: true
 
-- name: Create a project
-  ansible.builtin.shell: |
-    source /root/admin-openrc
-    openstack project create --domain {{ os_project_domain_name }}
-    --description "Service Project" {{ os_service_project_name }}
-  when: service_project_check.rc != 0
-  become: true
 

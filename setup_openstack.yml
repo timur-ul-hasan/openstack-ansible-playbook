@@ -7,27 +7,64 @@
     - vars/global.yml
 
   tasks:
-    - import_tasks: tasks/base_setup.yml
+    - block:
+        - name: Include base setup tasks
+          import_tasks: tasks/base_setup.yml
+      rescue:
+        - debug:
+            msg: "Base setup tasks failed, continuing with the rest of the playbook."
 
-    # - name: Setup Keystone
-    #   import_tasks: tasks/keystone.yml
+    - block:
+        - name: Setup Keystone
+          import_tasks: tasks/keystone.yml
+      rescue:
+        - debug:
+            msg: "Keystone setup failed, continuing with the rest of the playbook."
 
-    # service_project.yml
+    - block:
+        - name: Setup Service Project
+          import_tasks: tasks/service_project.yml
+      rescue:
+        - debug:
+            msg: "Service Project setup failed, continuing with the rest of the playbook."
 
-    - name: Setup Service Project
-      import_tasks: tasks/service_project.yml
+    - block:
+        - name: Setup Nova
+          import_tasks: tasks/nova.yml
+      rescue:
+        - debug:
+            msg: "Nova setup failed, continuing with the rest of the playbook."
 
-    # - name: Setup Nova
-    #   import_tasks: tasks/nova.yml
+    - block:
+      - name: Setup Swift
+        import_tasks: tasks/swift.yml
+      rescue:
+        - debug:
+            msg: "Swift setup failed, continuing with the rest of the playbook."
 
-    # - name: Setup Swift
-    #   import_tasks: tasks/swift.yml
+    - block:
+      - name: Setup Trove
+        import_tasks: tasks/trove.yml
+      rescue:
+        - debug:
+            msg: "Trove setup failed, continuing with the rest of the playbook."
+    - block:
+        - name: Setup Ceilometer
+          import_tasks: tasks/ceilometer.yml
+      rescue:
+        - debug:
+            msg: "Ceilometer setup failed, continuing with remaining tasks."
+            
+    - block:
+        - name: Setup Neutron
+          import_tasks: tasks/neutron.yml
+      rescue:
+        - debug:
+            msg: "Neutron setup failed, continuing with remaining tasks."
 
-    - name: Setup Trove
-      import_tasks: tasks/trove.yml
-    
-    # - name: Setup Ceilometer
-    #   import_tasks: tasks/ceilometer.yml
-    
-    # - name: Setup Neutron
-    #   import_tasks: tasks/neutron.yml
+    - block:
+        - name: Setup Horizon
+          import_tasks: tasks/horizon.yml
+      rescue:
+        - debug:
+            msg: "Horizon setup failed, continuing with remaining tasks."
