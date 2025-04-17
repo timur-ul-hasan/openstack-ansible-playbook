@@ -20,7 +20,7 @@
       """
       from openstack_dashboard.settings import *
       
-      DEBUG = {{ horizon_debug | lower }}
+      DEBUG = True
       WEBROOT = '/'
       ALLOWED_HOSTS = ['*']
       OPENSTACK_HOST = "{{ openstack_host }}"

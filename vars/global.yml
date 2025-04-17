@@ -1,7 +1,6 @@
-# Service specific variables
-home_dir: /home/vagrant
-private_ip: 192.168.18.100
-state_public_ip: 154.192.156.8
+home_dir: "/home/{{ ansible_user }}"
+private_ip: "{{ server }}"
+state_public_ip: "{{ server }}"
 
 # Keystone DB configuration
 keystone_db_name: keystone
@@ -61,7 +60,6 @@ placement_service_password: PLACEMENT_SERVICE_PASS
 # Management IP of controller node
 my_ip: 10.0.2.15
 management_ip: 10.0.2.15
-
 
 # Swift configuration
 swift_password: "YOUR_SWIFT_PASSWORD"

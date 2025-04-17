@@ -177,3 +177,15 @@
 - name: Grant full permissions on '/' vhost
   ansible.builtin.command:
     cmd: rabbitmqctl set_permissions -p / {{ rabbitmq_user }} '.*' '.*' '.*'
+
+- name: Install redis-server
+  ansible.builtin.apt:
+    name: redis-server
+    state: present
+    update_cache: yes
+
+- name: Ensure redis is running
+  ansible.builtin.service:
+    name: redis-server
+    state: started
+    enabled: yes
