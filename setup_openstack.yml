@@ -29,13 +29,6 @@
             msg: "Service Project setup failed, continuing with the rest of the playbook."
 
     - block:
-        - name: Setup Nova
-          import_tasks: tasks/nova.yml
-      rescue:
-        - debug:
-            msg: "Nova setup failed, continuing with the rest of the playbook."
-
-    - block:
       - name: Setup Swift
         import_tasks: tasks/swift.yml
       rescue:
@@ -48,12 +41,34 @@
       rescue:
         - debug:
             msg: "Trove setup failed, continuing with the rest of the playbook."
+
     - block:
-        - name: Setup Ceilometer
-          import_tasks: tasks/ceilometer.yml
+        - name: Setup Glance
+          import_tasks: tasks/glance.yml
       rescue:
         - debug:
-            msg: "Ceilometer setup failed, continuing with remaining tasks."
+            msg: "Glance setup failed, continuing with remaining tasks."
+
+    - block:
+        - name: Setup Placement
+          import_tasks: tasks/placement.yml
+      rescue:
+        - debug:
+            msg: "Placement setup failed, continuing with remaining tasks."
+
+    - block:
+        - name: Setup Nova Controller
+          import_tasks: tasks/nova_controller.yml
+      rescue:
+        - debug:
+            msg: "Nova setup failed, continuing with the rest of the playbook."
+
+    - block:
+        - name: Setup Nova Compute
+          import_tasks: tasks/nova_compute.yml
+      rescue:
+        - debug:
+            msg: "Nova setup failed, continuing with the rest of the playbook."
             
     - block:
         - name: Setup Neutron
@@ -68,3 +83,12 @@
       rescue:
         - debug:
             msg: "Horizon setup failed, continuing with remaining tasks."
+
+
+    - block:
+        - name: Setup Ceilometer
+          import_tasks: tasks/ceilometer.yml
+      rescue:
+        - debug:
+            msg: "Ceilometer setup failed, continuing with remaining tasks."
+

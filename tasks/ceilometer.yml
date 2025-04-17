@@ -8,34 +8,62 @@
     update_cache: yes
   become: true
 
-- name: Create Ceilometer user in the service project
+- name: Ensure Ceilometer user exists
   ansible.builtin.shell: |
     source /root/admin-openrc
-    openstack user create ceilometer --project service --password '{{ ceilometer_password }}'
+    openstack user show ceilometer >/dev/null 2>&1 \
+      || openstack user create ceilometer --project service --password '{{ ceilometer_password }}'
   args:
     executable: /bin/bash
-  become: true
 
-- name: Assign admin role to ceilometer user in the service project
+- name: Ensure Ceilometer user has admin role on service project
   ansible.builtin.shell: |
     source /root/admin-openrc
-    openstack role add --user ceilometer --project service admin
+    openstack role assignment list --user ceilometer --project service --names \
+      | grep -qw admin \
+      || openstack role add --user ceilometer --project service admin
   args:
     executable: /bin/bash
-  become: true
 
-- name: Register Ceilometer service in Keystone
+- name: Ensure Ceilometer service is registered in Keystone
   ansible.builtin.shell: |
     source /root/admin-openrc
-    openstack service create --name ceilometer --description "Telemetry" metering
+    openstack service show ceilometer >/dev/null 2>&1 \
+      || openstack service create --name ceilometer --description "Telemetry" metering
   args:
     executable: /bin/bash
-  become: true
+
+- name: Ensure Gnocchi user exists
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack user show gnocchi >/dev/null 2>&1 \
+      || openstack user create --domain default --password '{{ gnocchi_service_password }}' gnocchi
+  args:
+    executable: /bin/bash
+
+
+- name: Ensure Gnocchi service is registered in Keystone
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack service show gnocchi >/dev/null 2>&1 \
+      || openstack service create --name gnocchi --description "Metric Service" metric
+  args:
+    executable: /bin/bash
+
+- name: Ensure Gnocchi user has admin role on service project
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack role assignment list --user gnocchi --project service --names \
+      | grep -qw admin \
+      || openstack role add --user gnocchi --project service admin
+  args:
+    executable: /bin/bash
+
 
 - name: Create Ceilometer public endpoint
   ansible.builtin.shell: |
     source /root/admin-openrc
-    openstack endpoint create --region RegionOne metering public http://{{ ceilometer_api_host }}:8777
+    openstack endpoint create --region RegionOne metric public http://{{ ceilometer_api_host }}:8777
   args:
     executable: /bin/bash
   become: true
@@ -43,7 +71,7 @@
 - name: Create Ceilometer admin endpoint
   ansible.builtin.shell: |
     source /root/admin-openrc
-    openstack endpoint create --region RegionOne metering admin http://{{ ceilometer_api_host }}:8777
+    openstack endpoint create --region RegionOne metric admin http://{{ ceilometer_api_host }}:8777
   args:
     executable: /bin/bash
   become: true
@@ -51,15 +79,204 @@
 - name: Create Ceilometer internal endpoint
   ansible.builtin.shell: |
     source /root/admin-openrc
-    openstack endpoint create --region RegionOne metering internal http://{{ ceilometer_api_host }}:8777
+    openstack endpoint create --region RegionOne metric internal http://{{ ceilometer_api_host }}:8777
   args:
     executable: /bin/bash
   become: true
 
-- name: Run Ceilometer database synchronization
+- name: Install Gnocchi packages
+  ansible.builtin.apt:
+    name:
+      - gnocchi-api
+      - gnocchi-metricd
+      - python3-gnocchiclient
+    state: present
+    update_cache: yes
+  become: true
+
+- name: Install uwsgi and python3 plugin
+  ansible.builtin.apt:
+    name:
+      - uwsgi-plugin-python3
+      - uwsgi
+    state: present
+    update_cache: yes
+  become: true
+
+- name: Ensure the gnocchi database exists
+  community.mysql.mysql_db:
+    name: gnocchi
+    state: present
+    login_user: root
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+
+- name: Ensure gnocchi@localhost has full privileges on gnocchi
+  community.mysql.mysql_user:
+    name: gnocchi
+    host: localhost
+    password: "{{ gnocchi_db_pass }}"
+    priv: "gnocchi.*:ALL"
+    state: present
+    login_user: root
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+
+- name: Ensure gnocchi@'%' has full privileges on gnocchi
+  community.mysql.mysql_user:
+    name: gnocchi
+    host: "%"
+    password: "{{ gnocchi_db_pass }}"
+    priv: "gnocchi.*:ALL"
+    state: present
+    login_user: root
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+
+- name: Configure [api] section
+  ansible.builtin.ini_file:
+    path: /etc/gnocchi/gnocchi.conf
+    section: api
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    backup: yes
+  loop:
+    - { option: auth_mode, value: keystone }
+    - { option: port, value: "8041" }
+    - { option: uwsgi_mode, value: http-socket }
+
+- name: Configure [keystone_authtoken] section
+  ansible.builtin.ini_file:
+    path: /etc/gnocchi/gnocchi.conf
+    section: keystone_authtoken
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    backup: yes
+  loop:
+    - { option: auth_type, value: password }
+    - { option: auth_url, value: http://controller:5000/v3 }
+    - { option: project_domain_name, value: Default }
+    - { option: user_domain_name, value: Default }
+    - { option: project_name, value: service }
+    - { option: username, value: gnocchi }
+    - { option: password, value: "{{ gnocchi_service_password }}" }
+    - { option: interface, value: internalURL }
+    - { option: region_name, value: RegionOne }
+
+- name: Configure [indexer] section
+  ansible.builtin.ini_file:
+    path: /etc/gnocchi/gnocchi.conf
+    section: indexer
+    option: url
+    value: "mysql+pymysql://gnocchi:{{ gnocchi_db_pass }}@controller/gnocchi"
+    backup: yes
+
+- name: Configure [storage] section
+  ansible.builtin.ini_file:
+    path: /etc/gnocchi/gnocchi.conf
+    section: storage
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    backup: yes
+  loop:
+    - { option: coordination_url, value: redis://controller:6379 }
+    - { option: file_basepath, value: /var/lib/gnocchi }
+    - { option: driver, value: file }
+
+- name: Run gnocchi-upgrade
+  ansible.builtin.command: gnocchi-upgrade
+  args:
+    creates: /var/lib/gnocchi/.gnocchi_upgraded
+  become: true
+
+- name: Touch Gnocchi upgrade marker
+  ansible.builtin.file:
+    path: /var/lib/gnocchi/.gnocchi_upgraded
+    state: touch
+
+- name: Restart Gnocchi API (Apache WSGI)
+  ansible.builtin.service:
+    name: apache2
+    state: restarted
+
+- name: Restart Gnocchi metric daemon
+  ansible.builtin.service:
+    name: gnocchi-metricd
+    state: restarted
+
+- name: Install ceilometer-agent packages
+  ansible.builtin.apt:
+    name:
+      - ceilometer-agent-notification
+      - ceilometer-agent-central
+    state: present
+    update_cache: yes
+
+- name: Ensure /etc/ceilometer directory exists
+  ansible.builtin.file:
+    path: /etc/ceilometer
+    state: directory
+
+- name: Ensure Gnocchi publisher in /etc/ceilometer/pipeline.yaml (create file if missing)
+  ansible.builtin.lineinfile:
+    path: /etc/ceilometer/pipeline.yaml
+    create: yes
+    insertafter: '^publishers:'
+    line: '    - gnocchi://?filter_project=service&archive_policy=low'
+    state: present
+
+- name: Set RabbitMQ transport_url in ceilometer.conf
+  ansible.builtin.ini_file:
+    path: /etc/ceilometer/ceilometer.conf
+    section: DEFAULT
+    option: transport_url
+    value: "rabbit://openstack:{{ rabbit_pass }}@controller"
+    backup: yes
+
+- name: Configure service_credentials in ceilometer.conf
+  ansible.builtin.ini_file:
+    path: /etc/ceilometer/ceilometer.conf
+    section: service_credentials
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    backup: yes
+  loop:
+    - { option: auth_type, value: password }
+    - { option: auth_url, value: http://controller:5000/v3 }
+    - { option: project_domain_id, value: default }
+    - { option: user_domain_id, value: default }
+    - { option: project_name, value: service }
+    - { option: username, value: ceilometer }
+    - { option: password, value: "{{ ceilometer_password }}" }
+    - { option: interface, value: internalURL }
+    - { option: region_name, value: RegionOne }
+
+- name: Run gnocchi-upgrade under admin context
   ansible.builtin.shell: |
     source /root/admin-openrc
-    ceilometer-dbsync
+    gnocchi-upgrade
   args:
+    creates: /var/lib/gnocchi/.gnocchi_upgraded
     executable: /bin/bash
   become: true
+
+- name: Touch Gnocchi upgrade marker
+  ansible.builtin.file:
+    path: /var/lib/gnocchi/.gnocchi_upgraded
+    state: touch
+
+- name: Run ceilometer-upgrade under admin context
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    ceilometer-upgrade
+  args:
+    creates: /var/lib/ceilometer/.ceilometer_upgraded
+    executable: /bin/bash
+  become: true
+
+- name: Restart ceilometer-agent-central
+  ansible.builtin.service:
+    name: ceilometer-agent-central
+    state: restarted
+
+- name: Restart ceilometer-agent-notification
+  ansible.builtin.service:
+    name: ceilometer-agent-notification
+    state: restarted

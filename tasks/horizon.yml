@@ -40,7 +40,6 @@
           "volume": 3,
       }
 
-
       # Timezone configuration
       TIME_ZONE = "{{ horizon_timezone }}"
       

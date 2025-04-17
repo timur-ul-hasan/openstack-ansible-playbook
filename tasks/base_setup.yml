@@ -136,7 +136,44 @@
       export OS_REGION_NAME="{{ os_region_name }}"
       export OS_INTERFACE="{{ os_interface }}"
       export OS_SERVICE_PROJECT_NAME="{{ os_service_project_name }}"
+      export OS_AUTH_TYPE=password
     owner: root
     group: root
     mode: '0600'
   become: true
+
+
+- name: Pre-seed dash so it will NOT be used as /bin/sh
+  ansible.builtin.debconf:
+    name: dash
+    question: dash/sh
+    vtype: boolean
+    value: false
+  become: true
+
+- name: Ensure dash is installed (so our preseeding applies)
+  ansible.builtin.apt:
+    name: dash
+    state: present
+    update_cache: yes
+  become: true
+
+- name: Reconfigure dash non‑interactively
+  ansible.builtin.command: dpkg-reconfigure dash -f noninteractive
+  become: true
+
+
+- name: Check if RabbitMQ user exists
+  ansible.builtin.command:
+    cmd: rabbitmqctl list_users
+  register: rmq_users
+  changed_when: false
+
+- name: Add RabbitMQ user if missing
+  ansible.builtin.command:
+    cmd: rabbitmqctl add_user {{ rabbitmq_user }} {{ rabbit_pass }}
+  when: "'{{ rabbitmq_user }}' not in rmq_users.stdout"
+
+- name: Grant full permissions on '/' vhost
+  ansible.builtin.command:
+    cmd: rabbitmqctl set_permissions -p / {{ rabbitmq_user }} '.*' '.*' '.*'

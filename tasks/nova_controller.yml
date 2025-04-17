@@ -1,0 +1,260 @@
+---
+- name: Ensure Nova databases exist
+  community.mysql.mysql_db:
+    name: "{{ item }}"
+    state: present
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+  loop:
+    - nova_api
+    - nova
+    - nova_cell0
+  tags: db 
+
+- name: Grant full privileges to Nova DB users
+  community.mysql.mysql_user:
+    name: nova
+    host: "{{ item.host }}"
+    password: "{{ nova_db_pass }}"
+    priv:
+      "{{ item.db }}.*": "ALL,GRANT"
+    login_user: root
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    config_file: ""
+    state: present
+  loop:
+    - { host: "localhost", db: "nova_api" }
+    - { host: "%",         db: "nova_api" }
+    - { host: "localhost", db: "nova" }
+    - { host: "%",         db: "nova" }
+    - { host: "localhost", db: "nova_cell0" }
+    - { host: "%",         db: "nova_cell0" }
+  tags: db
+
+
+
+- name: Ensure Nova user exists
+  ansible.builtin.shell: |
+    . /root/admin-openrc
+    openstack user show nova >/dev/null 2>&1 \
+      || openstack user create --domain default \
+          --password {{ nova_pass }} nova
+  args:
+    executable: /bin/bash
+  tags: keystone
+
+- name: Ensure Nova user has admin role on service project
+  ansible.builtin.shell: |
+    . /root/admin-openrc
+    openstack role assignment list --user nova \
+      --project service --names | grep -q '^admin$' \
+      || openstack role add --project service \
+          --user nova admin
+  args:
+    executable: /bin/bash
+  tags: keystone
+
+- name: Register Nova service in Keystone
+  ansible.builtin.shell: |
+    . /root/admin-openrc
+    openstack service show nova >/dev/null 2>&1 \
+      || openstack service create --name nova \
+          --description "OpenStack Compute" compute
+  args:
+    executable: /bin/bash
+  tags: keystone
+
+
+- name: Register Nova and Placement in Keystone
+  ansible.builtin.shell: |
+    set -e
+    . /root/admin-openrc
+
+    # Placement endpoints
+    for iface in public internal admin; do
+      openstack endpoint create --region RegionOne placement $iface http://controller:8778
+    done
+  args:
+    executable: /bin/bash
+  tags: keystone 
+
+- name: Install Nova controller packages
+  apt:
+    name:
+      - nova-api
+      - nova-conductor
+      - nova-novncproxy
+      - nova-scheduler
+    state: present
+    update_cache: yes
+  tags: install 
+
+- name: Configure Nova database connections
+  ansible.builtin.ini_file:
+    path: /etc/nova/nova.conf
+    section: "{{ item.section }}"
+    option: connection
+    value: "{{ item.value }}"
+    backup: yes
+  loop:
+    - { section: api_database, value: "mysql+pymysql://nova:{{ nova_db_pass }}@controller/nova_api" }
+    - { section: database,     value: "mysql+pymysql://nova:{{ nova_db_pass }}@controller/nova" }
+  tags: config  
+
+- name: Configure RabbitMQ transport URL
+  ansible.builtin.ini_file:
+    path: /etc/nova/nova.conf
+    section: DEFAULT
+    option: transport_url
+    value: "rabbit://openstack:{{ rabbit_pass }}@controller"
+    backup: yes
+  tags: config  
+
+- name: Configure Keystone auth strategy
+  ansible.builtin.ini_file:
+    path: /etc/nova/nova.conf
+    section: api
+    option: auth_strategy
+    value: keystone
+    backup: yes
+  tags: config 
+
+- name: Configure keystone_authtoken in nova.conf
+  ansible.builtin.ini_file:
+    path: /etc/nova/nova.conf
+    section: keystone_authtoken
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    backup: yes
+  loop:
+    - { option: auth_url,            value: "http://controller:5000/v3" }
+    - { option: memcached_servers,   value: "controller:11211" }
+    - { option: auth_type,           value: password }
+    - { option: project_domain_name, value: default }
+    - { option: user_domain_name,    value: default }
+    - { option: project_name,        value: service }
+    - { option: username,            value: nova }
+    - { option: password,            value: "{{ nova_pass }}" }
+  tags: config 
+
+- name: Configure controller node network and neutron
+  ansible.builtin.ini_file:
+    path: /etc/nova/nova.conf
+    section: DEFAULT
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    backup: yes
+  loop:
+    - { option: my_ip,           value: "{{ my_ip }}" }
+    - { option: use_neutron,     value: "True" }
+    - { option: firewall_driver, value: "nova.virt.firewall.NoopFirewallDriver" }
+  tags: config  
+
+- name: Configure VNC in nova.conf
+  ansible.builtin.ini_file:
+    path: /etc/nova/nova.conf
+    section: vnc
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    backup: yes
+  loop:
+    - { option: enabled,                       value: "true" }
+    - { option: server_listen,                 value: "{{ my_ip }}" }
+    - { option: server_proxyclient_address,    value: "{{ my_ip }}" }
+  tags: config 
+
+- name: Configure Glance API server in nova.conf
+  ansible.builtin.ini_file:
+    path: /etc/nova/nova.conf
+    section: glance
+    option: api_servers
+    value: "http://controller:9292"
+    backup: yes
+  tags: config 
+
+- name: Configure oslo_concurrency lock path
+  ansible.builtin.ini_file:
+    path: /etc/nova/nova.conf
+    section: oslo_concurrency
+    option: lock_path
+    value: "/var/lib/nova/tmp"
+    backup: yes
+  tags: config 
+
+- name: Configure Placement in nova.conf
+  ansible.builtin.ini_file:
+    path: /etc/nova/nova.conf
+    section: placement
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    backup: yes
+  loop:
+    - { option: os_region_name,     value: RegionOne }
+    - { option: project_domain_name,value: Default }
+    - { option: project_name,       value: service }
+    - { option: auth_type,          value: password }
+    - { option: user_domain_name,   value: Default }
+    - { option: auth_url,           value: "http://controller:5000/v3" }
+    - { option: username,           value: placement }
+    - { option: password,           value: "{{ placement_pass }}" }
+  tags: config 
+
+
+- name: Grant Nova DB privileges via here‑doc
+  ansible.builtin.shell: |
+    mysql -S /var/run/mysqld/mysqld.sock <<EOF
+    CREATE USER IF NOT EXISTS 'nova'@'localhost' IDENTIFIED BY '{{ nova_db_pass }}';
+    CREATE USER IF NOT EXISTS 'nova'@'%'         IDENTIFIED BY '{{ nova_db_pass }}';
+    GRANT ALL PRIVILEGES ON nova_api.*     TO 'nova'@'localhost' WITH GRANT OPTION;
+    GRANT ALL PRIVILEGES ON nova_api.*     TO 'nova'@'%'         WITH GRANT OPTION;
+    GRANT ALL PRIVILEGES ON nova.*         TO 'nova'@'localhost' WITH GRANT OPTION;
+    GRANT ALL PRIVILEGES ON nova.*         TO 'nova'@'%'         WITH GRANT OPTION;
+    GRANT ALL PRIVILEGES ON nova_cell0.*   TO 'nova'@'localhost' WITH GRANT OPTION;
+    GRANT ALL PRIVILEGES ON nova_cell0.*   TO 'nova'@'%'         WITH GRANT OPTION;
+    FLUSH PRIVILEGES;
+    EOF
+  args:
+    executable: /bin/bash
+
+
+- name: Populate the nova-api database
+  ansible.builtin.command: >
+    su -s /bin/sh -c "nova-manage api_db sync" nova
+  tags: dbsync  
+
+- name: Map cell0
+  ansible.builtin.command: >
+    su -s /bin/sh -c "nova-manage cell_v2 map_cell0" nova
+  tags: dbsync  
+
+- name: Check if cell1 exists
+  ansible.builtin.shell: |
+    su -s /bin/sh -c "nova-manage cell_v2 list_cells" nova
+  register: cell_list
+  args:
+    executable: /bin/bash
+  changed_when: false
+  failed_when: false
+
+- name: Create cell1 if missing
+  ansible.builtin.shell: |
+    su -s /bin/sh -c "nova-manage cell_v2 create_cell --name cell1 --verbose" nova
+  args:
+    executable: /bin/bash
+  when: "'cell1' not in cell_list.stdout"
+  tags: dbsync
+
+- name: Populate the main Nova database
+  ansible.builtin.command: >
+    su -s /bin/sh -c "nova-manage db sync" nova
+  tags: dbsync 
+
+- name: Restart all Nova controller services
+  service:
+    name: "{{ item }}"
+    state: restarted
+  loop:
+    - nova-api
+    - nova-scheduler
+    - nova-conductor
+    - nova-novncproxy
+  tags: finalize  

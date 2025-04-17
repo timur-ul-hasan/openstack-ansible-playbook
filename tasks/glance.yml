@@ -1,12 +1,10 @@
 ---
-# 1. Ensure the 'glance' database exists
 - name: Ensure 'glance' database exists (via Unix socket with sudo)
   community.mysql.mysql_db:
     name: glance
     state: present
     login_unix_socket: /var/run/mysqld/mysqld.sock
 
-# 2. Create 'glance'@'localhost' user with full privileges
 - name: Create 'glance'@'localhost' user with full privileges
   community.mysql.mysql_user:
     name: glance
@@ -16,7 +14,6 @@
     state: present
     login_unix_socket: /var/run/mysqld/mysqld.sock
 
-# 3. Create 'glance'@'%' user with full privileges
 - name: Create 'glance'@'%' user with full privileges
   community.mysql.mysql_user:
     name: glance
@@ -26,13 +23,11 @@
     state: present
     login_unix_socket: /var/run/mysqld/mysqld.sock
 
-# 4. Install Glance
 - name: Install Glance packages
   apt:
     name: glance
     state: present
 
-# 5. Configure glance-api.conf: database connection
 - name: Configure Glance database connection
   ansible.builtin.ini_file:
     path: /etc/glance/glance-api.conf
@@ -41,7 +36,6 @@
     value: "mysql+pymysql://glance:{{ glance_db_password }}@controller/glance"
     backup: yes
 
-# 6. Configure glance-api.conf: Keystone authentication
 - name: Configure Glance Keystone auth in glance-api.conf
   ansible.builtin.ini_file:
     path: /etc/glance/glance-api.conf
@@ -98,7 +92,6 @@
     value: "{{ glance_service_password }}"
     backup: yes
 
-# 7. Configure glance-api.conf: paste_deploy flavor
 - name: Configure Glance paste_deploy flavor
   ansible.builtin.ini_file:
     path: /etc/glance/glance-api.conf
@@ -107,7 +100,6 @@
     value: "keystone"
     backup: yes
 
-# 8. Configure glance-api.conf: filesystem store
 - name: Configure Glance filesystem store backend
   ansible.builtin.ini_file:
     path: /etc/glance/glance-api.conf
@@ -132,7 +124,6 @@
     value: "/var/lib/glance/images/"
     backup: yes
 
-# 9. Configure glance-api.conf: oslo_limit for Keystone quotas
 - name: Configure Glance unified limits (oslo_limit)
   ansible.builtin.ini_file:
     path: /etc/glance/glance-api.conf
@@ -191,10 +182,9 @@
 
 - name: Populate the Glance database
   become: true
-  become_user: glance
-  ansible.builtin.shell: "glance-manage db_sync"
+  ansible.builtin.shell: |
+    su -s /bin/sh -c 'glance-manage db_sync' glance
 
-# 11. Restart the Glance API service
 - name: Restart glance-api service
   ansible.builtin.service:
     name: glance-api

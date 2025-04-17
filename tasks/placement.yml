@@ -23,12 +23,39 @@
     state: present
     login_unix_socket: /var/run/mysqld/mysqld.sock
 
-- name: Source admin credentials and create Placement user
+
+- name: Ensure Placement user exists
   ansible.builtin.shell: |
     . /root/admin-openrc
-    openstack user create --domain default --password {{ placement_service_password }} placement
-    openstack role add --project service --user placement admin
-    openstack service create --name placement --description "Placement API" placement
+    openstack user show placement >/dev/null 2>&1 \
+      || openstack user create --domain default \
+          --password {{ placement_service_password }} placement
+  args:
+    executable: /bin/bash
+
+- name: Ensure Placement user has admin role on service project
+  ansible.builtin.shell: |
+    . /root/admin-openrc
+    openstack role assignment list --user placement \
+      --project service --names | grep -q '^admin$' \
+      || openstack role add --project service \
+          --user placement admin
+  args:
+    executable: /bin/bash
+
+- name: Ensure Placement service exists
+  ansible.builtin.shell: |
+    . /root/admin-openrc
+    openstack service show placement >/dev/null 2>&1 \
+      || openstack service create --name placement \
+          --description "Placement API" placement
+  args:
+    executable: /bin/bash
+
+
+- name: Ensure Placement endpoints exist
+  ansible.builtin.shell: |
+    . /root/admin-openrc
     openstack endpoint create --region RegionOne placement public http://controller:8778
     openstack endpoint create --region RegionOne placement internal http://controller:8778
     openstack endpoint create --region RegionOne placement admin http://controller:8778
@@ -75,9 +102,10 @@
     - { option: password,            value: "{{ placement_service_password }}" }
 
 - name: Populate the placement database
-  become_user: placement
-  shell: placement-manage db sync
-
+  become: true
+  ansible.builtin.shell: |
+    su -s /bin/sh -c 'placement-manage db sync' placement
+    
 - name: Restart Apache2
   service:
     name: apache2

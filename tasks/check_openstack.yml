@@ -14,4 +14,3 @@
     OS_IDENTITY_API_VERSION: "{{ os_identity_api_version }}"
     OS_REGION_NAME: "{{ os_region_name}}"
     OS_INTERFACE: "{{ os_interface }}"
-

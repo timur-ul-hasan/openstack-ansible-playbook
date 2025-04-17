@@ -1,5 +1,5 @@
 # Service specific variables
-home_dir: /home/user
+home_dir: /home/vagrant
 private_ip: 192.168.18.100
 state_public_ip: 154.192.156.8
 
@@ -38,13 +38,30 @@ trove_conf_path: /etc/trove/trove.conf
 trove_folder: python-troveclient
 
 # Nova configuration
-nova_password: "YOUR_NOVA_PASSWORD"
+nova_password: "NOVA_DBPASS"
 nova_api_host: "controller"    
 nova_virtualenv: "{{ home_dir }}/nova_env"
 nova_repo: "https://opendev.org/openstack/nova.git"
 novaclient_repo: "https://opendev.org/openstack/python-novaclient.git"
 nova_clone_dest: "{{ home_dir }}/nova"
 novaclient_clone_dest: "{{ home_dir }}/python-novaclient"
+  # Database passwords
+nova_db_pass: NOVA_DBPASS
+# RabbitMQ password
+rabbit_pass: RABBIT_PASS
+
+rabbitmq_user: openstack
+# Keystone service passwords
+nova_pass: NOVA_PASS
+placement_pass: PLACEMENT_PASS
+
+placement_db_password: PLACEMENT_DBPASS
+placement_service_password: PLACEMENT_SERVICE_PASS
+
+# Management IP of controller node
+my_ip: 10.0.2.15
+management_ip: 10.0.2.15
+
 
 # Swift configuration
 swift_password: "YOUR_SWIFT_PASSWORD"
@@ -73,3 +90,10 @@ glance_db_password: "GLANCE_DBPASS"
 glance_service_password: "GLANCE_PASS"
 glance_api_host: "controller"
 glance_endpoint_id: "http://controller:9292"
+
+
+gnocchi_db_pass: "GNOCCHI_DBPASS"
+gnocchi_service_pass: "GNOCCHI_PASS"
+gnocchi_service_password: "GNOCCHI_PASS"
+
+ceilometer_pass:   CEILOMETER_PASSWORD

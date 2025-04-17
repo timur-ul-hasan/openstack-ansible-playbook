@@ -12,29 +12,67 @@
     update_cache: yes
   become: true
 
-- name: Create neutron user in the service project
+- name: Ensure Neutron user exists
   ansible.builtin.shell: |
     source /root/admin-openrc
-    openstack user create neutron --project service --password '{{ neutron_password }}'
+    openstack user show neutron >/dev/null 2>&1 \
+      || openstack user create neutron --project service --password '{{ neutron_password }}'
   args:
     executable: /bin/bash
   become: true
 
-- name: Assign admin role to neutron user in the service project
+- name: Ensure Neutron user has admin role on service project
   ansible.builtin.shell: |
     source /root/admin-openrc
-    openstack role add --user neutron --project service admin
+    openstack role assignment list --user neutron --project service --names \
+      | grep -qw admin \
+      || openstack role add --user neutron --project service admin
   args:
     executable: /bin/bash
   become: true
 
-- name: Register Neutron service in Keystone
+- name: Ensure Neutron service is registered in Keystone
   ansible.builtin.shell: |
     source /root/admin-openrc
-    openstack service create --name neutron --description "OpenStack Networking" network
+    openstack service show neutron >/dev/null 2>&1 \
+      || openstack service create --name neutron \
+         --description "OpenStack Networking" network
   args:
     executable: /bin/bash
   become: true
+
+- name: Ensure Gnocchi user exists
+  vars:
+    gnocchi_password: YOUR_GNOCCHI_PASSWORD
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack user show gnocchi >/dev/null 2>&1 \
+      || openstack user create --domain default \
+         --password "{{ gnocchi_password }}" gnocchi
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Ensure Gnocchi service is registered in Keystone
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack service show gnocchi >/dev/null 2>&1 \
+      || openstack service create --name gnocchi \
+         --description "Metric Service" metric
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Ensure Gnocchi user has admin role on service project
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack role assignment list --project service --user gnocchi --names \
+      | grep -qw admin \
+      || openstack role add --project service --user gnocchi admin
+  args:
+    executable: /bin/bash
+  become: true
+
 
 - name: Create Neutron public endpoint
   ansible.builtin.shell: |
@@ -59,3 +97,6 @@
   args:
     executable: /bin/bash
   become: true
+
+
+

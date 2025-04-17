@@ -3,6 +3,7 @@
   ansible.builtin.apt:
     name:
       - swift
+      - python3-swiftclient
       - swift-proxy
       - swift-account
       - swift-container
@@ -11,29 +12,31 @@
     update_cache: yes
   become: true
 
-- name: Create swift user in service project
+- name: Ensure Swift user exists
   ansible.builtin.shell: |
     source /root/admin-openrc
-    openstack user create swift --project service --password '{{ swift_password }}'
+    openstack user show swift >/dev/null 2>&1 \
+      || openstack user create swift --project service --password '{{ swift_password }}'
   args:
     executable: /bin/bash
-  become: true
 
-- name: Assign admin role to swift user in service project
+- name: Ensure Swift user has admin role on service project
   ansible.builtin.shell: |
     source /root/admin-openrc
-    openstack role add --user swift --project service admin
+    openstack role assignment list --user swift --project service --names \
+      | grep -qw admin \
+      || openstack role add --user swift --project service admin
   args:
     executable: /bin/bash
-  become: true
 
-- name: Register Swift service in Keystone
+- name: Ensure Swift service is registered in Keystone
   ansible.builtin.shell: |
     source /root/admin-openrc
-    openstack service create --name swift --description "OpenStack Object Storage" object-store
+    openstack service show swift >/dev/null 2>&1 \
+      || openstack service create --name swift \
+          --description "OpenStack Object Storage" object-store
   args:
     executable: /bin/bash
-  become: true
 
 - name: Create Swift public endpoint
   ansible.builtin.shell: |

@@ -1,0 +1,169 @@
+---
+###########################################################################
+## 1. Install Nova Compute Package
+###########################################################################
+- name: Install nova-compute package
+  ansible.builtin.apt:
+    name: nova-compute
+    state: present
+    update_cache: yes
+  #  [oai_citation_attribution:0‡OpenStack Docs](https://docs.openstack.org/nova/2025.1/install/compute-install-ubuntu.html)
+
+###########################################################################
+## 2. Configure /etc/nova/nova.conf
+###########################################################################
+
+- name: Configure RabbitMQ transport URL
+  ansible.builtin.ini_file:
+    path: /etc/nova/nova.conf
+    section: DEFAULT
+    option: transport_url
+    value: "rabbit://openstack:{{ rabbit_pass }}@controller"
+    backup: yes
+  #  [oai_citation_attribution:1‡OpenStack Docs](https://docs.openstack.org/nova/2025.1/install/compute-install-ubuntu.html)
+
+- name: Set Identity service auth strategy
+  ansible.builtin.ini_file:
+    path: /etc/nova/nova.conf
+    section: api
+    option: auth_strategy
+    value: keystone
+    backup: yes
+  #  [oai_citation_attribution:2‡OpenStack Docs](https://docs.openstack.org/nova/2025.1/install/compute-install-ubuntu.html)
+
+- name: Configure Keystone token middleware
+  ansible.builtin.ini_file:
+    path: /etc/nova/nova.conf
+    section: keystone_authtoken
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    backup: yes
+  loop:
+    - { option: www_authenticate_uri, value: http://controller:5000/ }
+    - { option: auth_url,             value: http://controller:5000/ }
+    - { option: memcached_servers,    value: controller:11211 }
+    - { option: auth_type,            value: password }
+    - { option: project_domain_name,  value: Default }
+    - { option: user_domain_name,     value: Default }
+    - { option: project_name,         value: service }
+    - { option: username,             value: nova }
+    - { option: password,             value: "{{ nova_pass }}" }
+  #  [oai_citation_attribution:3‡OpenStack Docs](https://docs.openstack.org/nova/2025.1/install/compute-install-ubuntu.html)
+
+- name: Enable service‑user tokens for nova
+  ansible.builtin.ini_file:
+    path: /etc/nova/nova.conf
+    section: service_user
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    backup: yes
+  loop:
+    - { option: send_service_user_token, value: "true" }
+    - { option: auth_url,                value: https://controller/identity }
+    - { option: auth_strategy,           value: keystone }
+    - { option: auth_type,               value: password }
+    - { option: project_domain_name,     value: Default }
+    - { option: project_name,            value: service }
+    - { option: user_domain_name,        value: Default }
+    - { option: username,                value: nova }
+    - { option: password,                value: "{{ nova_pass }}" }
+  #  [oai_citation_attribution:4‡OpenStack Docs](https://docs.openstack.org/nova/2025.1/install/compute-install-ubuntu.html)
+
+- name: Set management interface IP
+  ansible.builtin.ini_file:
+    path: /etc/nova/nova.conf
+    section: DEFAULT
+    option: my_ip
+    value: "{{ management_ip }}"
+    backup: yes
+  #  [oai_citation_attribution:5‡OpenStack Docs](https://docs.openstack.org/nova/2025.1/install/compute-install-ubuntu.html)
+
+- name: Configure networking integration for Neutron
+  ansible.builtin.ini_file:
+    path: /etc/nova/nova.conf
+    section: neutron
+    option: use_neutron
+    value: "True"
+    backup: yes
+  #  [oai_citation_attribution:6‡OpenStack Docs](https://docs.openstack.org/nova/2025.1/install/compute-install-ubuntu.html)
+
+- name: Configure VNC console access
+  ansible.builtin.ini_file:
+    path: /etc/nova/nova.conf
+    section: vnc
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    backup: yes
+  loop:
+    - { option: enabled,                    value: "true" }
+    - { option: server_listen,              value: "0.0.0.0" }
+    - { option: server_proxyclient_address, value: "{{ management_ip }}" }
+    - { option: novncproxy_base_url,        value: http://controller:6080/vnc_auto.html }
+  #  [oai_citation_attribution:7‡OpenStack Docs](https://docs.openstack.org/nova/2025.1/install/compute-install-ubuntu.html)
+
+- name: Configure Glance image service endpoint
+  ansible.builtin.ini_file:
+    path: /etc/nova/nova.conf
+    section: glance
+    option: api_servers
+    value: http://controller:9292
+    backup: yes
+  #  [oai_citation_attribution:8‡OpenStack Docs](https://docs.openstack.org/nova/2025.1/install/compute-install-ubuntu.html)
+
+- name: Configure oslo_concurrency lock path
+  ansible.builtin.ini_file:
+    path: /etc/nova/nova.conf
+    section: oslo_concurrency
+    option: lock_path
+    value: /var/lib/nova/tmp
+    backup: yes
+  #  [oai_citation_attribution:9‡OpenStack Docs](https://docs.openstack.org/nova/2025.1/install/compute-install-ubuntu.html)
+
+- name: Configure Placement API access
+  ansible.builtin.ini_file:
+    path: /etc/nova/nova.conf
+    section: placement
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    backup: yes
+  loop:
+    - { option: region_name,           value: RegionOne }
+    - { option: project_domain_name,  value: Default   }
+    - { option: project_name,         value: service   }
+    - { option: auth_type,            value: password  }
+    - { option: user_domain_name,     value: Default   }
+    - { option: auth_url,             value: http://controller:5000/v3 }
+    - { option: username,             value: placement }
+    - { option: password,             value: "{{ placement_pass }}" }
+  #  [oai_citation_attribution:10‡OpenStack Docs](https://docs.openstack.org/nova/2025.1/install/compute-install-ubuntu.html)
+
+###########################################################################
+## 3. Handle hardware acceleration / QEMU fallback
+###########################################################################
+
+- name: Check for CPU hardware acceleration
+  ansible.builtin.command: egrep -c '(vmx|svm)' /proc/cpuinfo
+  register: accel
+  changed_when: false
+  failed_when: false
+  #  [oai_citation_attribution:11‡OpenStack Docs](https://docs.openstack.org/nova/2025.1/install/compute-install-ubuntu.html)
+
+- name: Fallback to QEMU if no acceleration
+  ansible.builtin.ini_file:
+    path: /etc/nova/nova-compute.conf
+    section: libvirt
+    option: virt_type
+    value: qemu
+    backup: yes
+  when: accel.stdout|int == 0
+  #  [oai_citation_attribution:12‡OpenStack Docs](https://docs.openstack.org/nova/2025.1/install/compute-install-ubuntu.html)
+
+###########################################################################
+## 4. Restart the compute service
+###########################################################################
+
+- name: Restart nova-compute service
+  ansible.builtin.service:
+    name: nova-compute
+    state: restarted
+  #  [oai_citation_attribution:13‡OpenStack Docs](https://docs.openstack.org/nova/2025.1/install/compute-install-ubuntu.html)
