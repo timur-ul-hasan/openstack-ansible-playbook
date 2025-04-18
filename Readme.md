@@ -107,11 +107,10 @@ ansible-galaxy install -r requirements.yml
 [controller]
 controller ansible_host=<controller_ip> ansible_user=<ssh_user>
 [compute]
-
-
-
+```
 
 ### Run for the Vagrant VM:
+
 ```bash
 ansible-playbook -i inventory.ini setup_openstack.yml
 ```

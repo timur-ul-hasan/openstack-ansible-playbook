@@ -3,7 +3,6 @@
   ansible.builtin.apt:
     name:
       - openstack-dashboard
-      - memcached
     update_cache: yes
     state: present
 
@@ -21,9 +20,14 @@
       from openstack_dashboard.settings import *
       
       DEBUG = True
-      WEBROOT = '/'
+      WEBROOT = '/horizon'
+
       ALLOWED_HOSTS = ['*']
       OPENSTACK_HOST = "{{ openstack_host }}"
+
+      OPENSTACK_KEYSTONE_URL = 'http://%s:5000/v3' % OPENSTACK_HOST
+
+      OPENSTACK_KEYSTONE_ADMIN_URL = 'http://%s:35357/v3' % OPENSTACK_HOST
       
       # Session & cache settings
       SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
@@ -42,8 +46,6 @@
 
       # Timezone configuration
       TIME_ZONE = "{{ horizon_timezone }}"
-      
-      # Additional settings can be added below as necessary...
 
       
 - name: Restart Apache2 to apply Horizon configuration

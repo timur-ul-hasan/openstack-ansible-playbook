@@ -75,23 +75,51 @@ horizon_debug: false
 # neutron configuration
 neutron_password: "NEUTRON_PASSWORD"
 neutron_api_host: "controller"
-
+provider_bridge_name: "br-provider"
+provider_interface_name: "eno1"
 
 # celometer configuration
 ceilometer_password: "CEILOMETER_PASSWORD"
 ceilometer_api_host: "controller"
+ceilometer_mongo_host: localhost
+ceilometer_mongo_port: 27017
+ceilometer_db_name: ceilometer
+ceilometer_db_user: ceilometer
+openstack_cloud: default
+ceilometer_keystone_user: ceilometer
+ceilometer_keystone_pass: "{{ ceilometer_password }}"  # set via Vault
+service_project: service
+service_role: admin
+ceilometer_service_name: ceilometer
+ceilometer_service_type: metering
+region: RegionOne
+endpoint_port: 8777
 
+# Ceilometer configuration
+ceilometer_conf: /etc/ceilometer/ceilometer.conf
+ceilometer_db_connection: "mongodb://{{ ceilometer_mongo_host }}:{{ ceilometer_mongo_port }}/{{ ceilometer_db_name }}"
 
 
 # Glance configuration
-glance_db_password: "GLANCE_DBPASS"
+glance_db_password: "GLANCE_PASS"
 glance_service_password: "GLANCE_PASS"
 glance_api_host: "controller"
 glance_endpoint_id: "http://controller:9292"
+glance_password: "GLANCE_PASS"
 
-
-gnocchi_db_pass: "GNOCCHI_DBPASS"
+gnocchi_db_pass: "GNOCCHI_PASS"
 gnocchi_service_pass: "GNOCCHI_PASS"
 gnocchi_service_password: "GNOCCHI_PASS"
 
 ceilometer_pass:   CEILOMETER_PASSWORD
+
+metadata_proxy_shared_secret: "METADATA_SECRET"
+auth_url: "http://controller:5000"
+
+auth:
+  auth_url: "http://controller:5000"
+  username: "admin"
+  password: "{{ os_admin_password }}"
+  project_name: "admin"
+  user_domain_name: "Default"
+  project_domain_name: "Default"

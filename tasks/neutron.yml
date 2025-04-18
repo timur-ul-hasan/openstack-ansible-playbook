@@ -7,10 +7,26 @@
       - neutron-linuxbridge-agent
       - neutron-dhcp-agent
       - neutron-metadata-agent
+      - neutron-openvswitch-agent
       - iptables
     state: present
     update_cache: yes
   become: true
+
+- name: Ensure 'neutron' database exists (via Unix socket with sudo)
+  community.mysql.mysql_db:
+    name: neutron
+    state: present
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+
+- name: Ensure neutron@'%' has full privileges on neutron
+  community.mysql.mysql_user:
+    name: neutron
+    host: '%'
+    password: "{{ neutron_password }}"
+    priv: "neutron.*:ALL"
+    state: present
+    login_unix_socket: /var/run/mysqld/mysqld.sock
 
 - name: Ensure Neutron user exists
   ansible.builtin.shell: |
@@ -41,38 +57,6 @@
     executable: /bin/bash
   become: true
 
-- name: Ensure Gnocchi user exists
-  vars:
-    gnocchi_password: YOUR_GNOCCHI_PASSWORD
-  ansible.builtin.shell: |
-    source /root/admin-openrc
-    openstack user show gnocchi >/dev/null 2>&1 \
-      || openstack user create --domain default \
-         --password "{{ gnocchi_password }}" gnocchi
-  args:
-    executable: /bin/bash
-  become: true
-
-- name: Ensure Gnocchi service is registered in Keystone
-  ansible.builtin.shell: |
-    source /root/admin-openrc
-    openstack service show gnocchi >/dev/null 2>&1 \
-      || openstack service create --name gnocchi \
-         --description "Metric Service" metric
-  args:
-    executable: /bin/bash
-  become: true
-
-- name: Ensure Gnocchi user has admin role on service project
-  ansible.builtin.shell: |
-    source /root/admin-openrc
-    openstack role assignment list --project service --user gnocchi --names \
-      | grep -qw admin \
-      || openstack role add --project service --user gnocchi admin
-  args:
-    executable: /bin/bash
-  become: true
-
 
 - name: Create Neutron public endpoint
   ansible.builtin.shell: |
@@ -98,5 +82,130 @@
     executable: /bin/bash
   become: true
 
+- name: Configure Neutron metadata agent and Nova→Neutron integration in one task
+  ansible.builtin.ini_file:
+    path: "{{ item.path }}"
+    section: "{{ item.section }}"
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+  loop:
+    - { path: /etc/neutron/metadata_agent.ini, section: DEFAULT, option: nova_metadata_host,            value: controller }
+    - { path: /etc/neutron/metadata_agent.ini, section: DEFAULT, option: metadata_proxy_shared_secret, value: "{{ metadata_proxy_shared_secret }}" }
+    - { path: /etc/nova/nova.conf,         section: neutron, option: auth_url,                        value: "{{ auth_url }}" }
+    - { path: /etc/nova/nova.conf,         section: neutron, option: auth_type,                     value: password }
+    - { path: /etc/nova/nova.conf,         section: neutron, option: project_domain_name,           value: Default }
+    - { path: /etc/nova/nova.conf,         section: neutron, option: user_domain_name,              value: Default }
+    - { path: /etc/nova/nova.conf,         section: neutron, option: region_name,                   value: RegionOne }
+    - { path: /etc/nova/nova.conf,         section: neutron, option: project_name,                  value: service }
+    - { path: /etc/nova/nova.conf,         section: neutron, option: username,                      value: neutron }
+    - { path: /etc/nova/nova.conf,         section: neutron, option: password,                      value: "{{ neutron_password }}" , no_log: true }
+    - { path: /etc/nova/nova.conf,         section: neutron, option: service_metadata_proxy,       value: "true" }
+    - { path: /etc/nova/nova.conf,         section: neutron, option: metadata_proxy_shared_secret, value: "{{ metadata_proxy_shared_secret }}" }
+  loop_control:
+    label: "{{ item.path }}[{{ item.section }}] {{ item.option }}"
 
 
+- name: Set Keystone database connection string
+  ansible.builtin.ini_file:
+    path: /etc/neutron/neutron.conf
+    section: database
+    option: connection
+    value: "mysql+pymysql://neutron:{{ neutron_password }}@controller/neutron"
+    mode: '0640'
+    backup: yes
+
+- name: Run Neutron DB migration to head
+  become: true
+  ansible.builtin.command: >
+    neutron-db-manage
+      --config-file /etc/neutron/neutron.conf
+      --config-file /etc/neutron/plugins/ml2/ml2_conf.ini
+      upgrade head
+
+- name: Configure /etc/neutron/neutron.conf
+  become: true
+  ansible.builtin.ini_file:
+    path: /etc/neutron/neutron.conf
+    section: "{{ item.section }}"
+    option:  "{{ item.option }}"
+    value:   "{{ item.value }}"
+  loop:
+    - { section: database,       option: connection,                         value: "mysql+pymysql://neutron:{{ neutron_password }}@controller/neutron" }
+    - { section: DEFAULT,        option: core_plugin,                       value: ml2 }
+    - { section: DEFAULT,        option: service_plugins,                   value: "router" }
+    - { section: DEFAULT,        option: transport_url,                     value: "rabbit://openstack:{{ rabbit_pass }}@controller" }
+    - { section: DEFAULT,        option: auth_strategy,                     value: keystone }
+    - { section: DEFAULT,        option: notify_nova_on_port_status_changes, value: "true" }
+    - { section: DEFAULT,        option: notify_nova_on_port_data_changes,   value: "true" }
+    - { section: keystone_authtoken, option: www_authenticate_uri,           value: http://controller:5000 }
+    - { section: keystone_authtoken, option: auth_url,                      value: http://controller:5000 }
+    - { section: keystone_authtoken, option: memcached_servers,             value: controller:11211 }
+    - { section: keystone_authtoken, option: auth_type,                    value: password }
+    - { section: keystone_authtoken, option: project_domain_name,          value: Default }
+    - { section: keystone_authtoken, option: user_domain_name,             value: Default }
+    - { section: keystone_authtoken, option: project_name,                 value: service }
+    - { section: keystone_authtoken, option: username,                     value: neutron }
+    - { section: keystone_authtoken, option: password,                     value: "{{ neutron_password }}" }
+    - { section: nova,             option: auth_url,                       value: http://controller:5000 }
+    - { section: nova,             option: auth_type,                      value: password }
+    - { section: nova,             option: project_domain_name,            value: Default }
+    - { section: nova,             option: user_domain_name,               value: Default }
+    - { section: nova,             option: region_name,                    value: RegionOne }
+    - { section: nova,             option: project_name,                   value: service }
+    - { section: nova,             option: username,                       value: nova }
+    - { section: nova,             option: password,                       value: "{{ neutron_password }}" }
+    - { section: oslo_concurrency, option: lock_path,                      value: /var/lib/neutron/tmp }
+
+- name: Configure ML2 plugin in ml2_conf.ini
+  become: true
+  ansible.builtin.ini_file:
+    path: /etc/neutron/plugins/ml2/ml2_conf.ini
+    section: "{{ item.section }}"
+    option:  "{{ item.option }}"
+    value:   "{{ item.value }}"
+  loop:
+    - { section: ml2,           option: type_drivers,       value: "flat,vlan,vxlan" }
+    - { section: ml2,           option: tenant_network_types, value: "vxlan" }
+    - { section: ml2,           option: mechanism_drivers,   value: "openvswitch,l2population" }
+    - { section: ml2,           option: extension_drivers,   value: "port_security" }
+    - { section: ml2_type_flat, option: flat_networks,       value: "provider" }
+    - { section: ml2_type_vxlan, option: vni_ranges,        value: "1:1000" }
+
+- name: Configure /etc/neutron/plugins/ml2/openvswitch_agent.ini
+  become: true
+  ansible.builtin.ini_file:
+    path: /etc/neutron/plugins/ml2/openvswitch_agent.ini
+    section: "{{ item.section }}"
+    option:  "{{ item.option }}"
+    value:   "{{ item.value }}"
+  loop:
+    - { section: ovs, option: bridge_mappings, value: "provider:{{ provider_bridge_name }}" }
+    - { section: ovs, option: local_ip,        value: "{{ ansible_default_ipv4.address }}" }
+
+    - { section: agent, option: tunnel_types, value: vxlan }
+    - { section: agent, option: l2_population, value: "true" }
+
+    - { section: securitygroup, option: enable_security_group, value: "true" }
+    - { section: securitygroup, option: firewall_driver,      value: openvswitch }
+
+    - { section: DEFAULT, option: dhcp_driver, value: neutron.agent.linux.dhcp.Dnsmasq }
+    - { section: DEFAULT, option: enable_isolated_metadata, value: "true" }
+
+
+- name: Ensure OVS provider bridge and port exist
+  become: true
+  ansible.builtin.shell: |
+    ovs-vsctl --may-exist add-br {{ provider_bridge_name }}
+    ovs-vsctl --may-exist add-port {{ provider_bridge_name }} {{ provider_interface_name }}
+
+
+- name: Restart Apache2
+  service:
+    name: apache2
+    state: restarted
+
+- name: Restart neutron-server
+  become: true
+  ansible.builtin.service:
+    name: neutron-server
+    state: restarted

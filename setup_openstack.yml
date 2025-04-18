@@ -1,18 +1,22 @@
 ---
 - name: Setup OpenStack services (Keystone, Nova, Swift, Trove, etc.)
-  hosts: vagrant
+  hosts: all
   become: true
 
   vars_files:
     - vars/global.yml
 
+  collections:
+    - community.mongodb
+    - openstack.cloud
+
   tasks:
-    - block:
-        - name: Include base setup tasks
-          import_tasks: tasks/base_setup.yml
-      rescue:
-        - debug:
-            msg: "Base setup tasks failed, continuing with the rest of the playbook."
+    - name: Ensure openstacksdk ≥ 1.0 is installed
+      become: yes
+      ansible.builtin.pip:
+        name: openstacksdk>=1.0.0
+        executable: pip3
+        state: latest
 
     - block:
         - name: Setup Keystone
@@ -83,7 +87,6 @@
       rescue:
         - debug:
             msg: "Horizon setup failed, continuing with remaining tasks."
-
 
     - block:
         - name: Setup Ceilometer

@@ -84,25 +84,6 @@
     executable: /bin/bash
   become: true
 
-- name: Install Gnocchi packages
-  ansible.builtin.apt:
-    name:
-      - gnocchi-api
-      - gnocchi-metricd
-      - python3-gnocchiclient
-    state: present
-    update_cache: yes
-  become: true
-
-- name: Install uwsgi and python3 plugin
-  ansible.builtin.apt:
-    name:
-      - uwsgi-plugin-python3
-      - uwsgi
-    state: present
-    update_cache: yes
-  become: true
-
 - name: Ensure the gnocchi database exists
   community.mysql.mysql_db:
     name: gnocchi
@@ -129,6 +110,25 @@
     state: present
     login_user: root
     login_unix_socket: /var/run/mysqld/mysqld.sock
+
+- name: Install Gnocchi packages
+  ansible.builtin.apt:
+    name:
+      - gnocchi-api
+      - gnocchi-metricd
+      - python3-gnocchiclient
+    state: present
+    update_cache: yes
+  become: true
+
+- name: Install uwsgi and python3 plugin
+  ansible.builtin.apt:
+    name:
+      - uwsgi-plugin-python3
+      - uwsgi
+    state: present
+    update_cache: yes
+  become: true
 
 - name: Configure [api] section
   ansible.builtin.ini_file:
@@ -157,7 +157,7 @@
     - { option: project_name, value: service }
     - { option: username, value: gnocchi }
     - { option: password, value: "{{ gnocchi_service_password }}" }
-    - { option: interface, value: internalURL }
+    - { option: interface, value: internal }
     - { option: region_name, value: RegionOne }
 
 - name: Configure [indexer] section

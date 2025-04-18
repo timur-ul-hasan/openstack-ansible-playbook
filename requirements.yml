@@ -1,0 +1,9 @@
+---
+collections:
+  - name: community.mongodb
+    version: 1.7.9
+  - name: openstack.cloud
+    version:  2.4.1
+  - name: community.mysql
+    version: 3.13.0
+

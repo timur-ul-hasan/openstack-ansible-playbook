@@ -23,6 +23,75 @@
     state: present
     login_unix_socket: /var/run/mysqld/mysqld.sock
 
+
+- name: Ensure Glance user exists
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack user show glance >/dev/null 2>&1 \
+      || openstack user create glance --project service --password '{{ glance_password }}'
+  args:
+    executable: /bin/bash
+
+- name: Ensure Glance user has admin role on service project
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack role assignment list --user glance --project service --names \
+      | grep -qw admin \
+      || openstack role add --user glance --project service admin
+  args:
+    executable: /bin/bash
+
+- name: Ensure Glance image is registered in Keystone
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack service show glance >/dev/null 2>&1 \
+      || openstack service create --name glance \
+          --description "OpenStack Image" image
+
+- name: Create public endpoint for Glance (image service)
+  openstack.cloud.endpoint:
+    region: RegionOne
+    service: glance
+    interface: public
+    endpoint_interface: public
+    url: http://controller:9292
+    auth:
+      auth_url: http://controller:5000/v3
+      username: admin
+      password: "{{ os_admin_password }}"
+      project_name: admin
+      user_domain_name: Default
+      project_domain_name: Default
+  register: glance_public_ep
+
+- name: Save the new endpoint ID
+  set_fact:
+    glance_public_endpoint_id: "{{ glance_public_ep.endpoint.id }}"
+
+- name: Ensure internal endpoint for Glance service exists
+  openstack.cloud.endpoint:
+    region: RegionOne
+    service: glance
+    interface: internal
+    endpoint_interface: internal
+    url: http://controller:9292
+    state: present
+    auth: 
+      auth_url: http://controller:5000/v3
+      username: admin
+      password: "{{ os_admin_password }}"
+      project_name: admin
+      user_domain_name: Default
+      project_domain_name: Default
+    
+- name: Create Glance admin endpoint
+  ansible.builtin.shell: |
+    source /root/admin-openrc
+    openstack endpoint create --region RegionOne image admin http://{{ glance_api_host }}:9292
+  args:
+    executable: /bin/bash
+  become: true
+
 - name: Install Glance packages
   apt:
     name: glance
@@ -75,6 +144,24 @@
     option: project_domain_name
     value: "Default"
     backup: yes
+
+# user_domain_name
+- name: Configure Domain Name
+  ansible.builtin.ini_file:
+    path: /etc/glance/glance-api.conf
+    section: keystone_authtoken
+    option: user_domain_name
+    value: "Default"
+    backup: yes
+
+- name: Configure Service Name
+  ansible.builtin.ini_file:
+    path: /etc/glance/glance-api.conf
+    section: keystone_authtoken
+    option: project_name
+    value: "service"
+    backup: yes
+
 
 - name: Configure Glance user credentials
   ansible.builtin.ini_file:
@@ -169,7 +256,7 @@
     path: /etc/glance/glance-api.conf
     section: oslo_limit
     option: endpoint_id
-    value: "{{ glance_endpoint_id }}"
+    value: "{{ glance_public_endpoint_id }}"
     backup: yes
 
 - name: Enable per-tenant quotas in glance-api.conf
