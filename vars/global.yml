@@ -5,12 +5,9 @@ state_public_ip: "{{ server }}"
 # Keystone DB configuration
 keystone_db_name: keystone
 keystone_db_user: keystone
-keystone_db_password: KEYSTONE_DBPASS
-
 
 # General OpenStack environment
 os_admin_user: admin
-os_admin_password: ADMIN_PASS
 os_project_name: admin
 os_user_domain_name: Default
 os_project_domain_name: Default
@@ -28,7 +25,6 @@ server_name: controller
 trove_api_host: controller 
 trove_auth_url: http://controller:5000/v3
 trove_username: admin
-trove_password: MySecureTrovePass
 trove_user_domain: default
 trove_project_name: admin
 trove_project_domain: default
@@ -37,49 +33,29 @@ trove_conf_path: /etc/trove/trove.conf
 trove_folder: python-troveclient
 
 # Nova configuration
-nova_password: "NOVA_DBPASS"
 nova_api_host: "controller"    
 nova_virtualenv: "{{ home_dir }}/nova_env"
 nova_repo: "https://opendev.org/openstack/nova.git"
 novaclient_repo: "https://opendev.org/openstack/python-novaclient.git"
 nova_clone_dest: "{{ home_dir }}/nova"
 novaclient_clone_dest: "{{ home_dir }}/python-novaclient"
-  # Database passwords
-nova_db_pass: NOVA_DBPASS
-# RabbitMQ password
-rabbit_pass: RABBIT_PASS
 
 rabbitmq_user: openstack
-# Keystone service passwords
-nova_pass: NOVA_PASS
-placement_pass: PLACEMENT_PASS
-
-placement_db_password: PLACEMENT_DBPASS
-placement_service_password: PLACEMENT_SERVICE_PASS
-
-# Management IP of controller node
-my_ip: 10.0.2.15
-management_ip: 10.0.2.15
 
 # Swift configuration
-swift_password: "YOUR_SWIFT_PASSWORD"
 swift_api_host: "controller" 
 
-
 # horizon configuration
-
 openstack_host: controller
 horizon_timezone: UTC
 horizon_debug: false
 
 # neutron configuration
-neutron_password: "NEUTRON_PASSWORD"
 neutron_api_host: "controller"
 provider_bridge_name: "br-provider"
 provider_interface_name: "eno1"
 
 # celometer configuration
-ceilometer_password: "CEILOMETER_PASSWORD"
 ceilometer_api_host: "controller"
 ceilometer_mongo_host: localhost
 ceilometer_mongo_port: 27017
@@ -87,7 +63,6 @@ ceilometer_db_name: ceilometer
 ceilometer_db_user: ceilometer
 openstack_cloud: default
 ceilometer_keystone_user: ceilometer
-ceilometer_keystone_pass: "{{ ceilometer_password }}"  # set via Vault
 service_project: service
 service_role: admin
 ceilometer_service_name: ceilometer
@@ -99,19 +74,9 @@ endpoint_port: 8777
 ceilometer_conf: /etc/ceilometer/ceilometer.conf
 ceilometer_db_connection: "mongodb://{{ ceilometer_mongo_host }}:{{ ceilometer_mongo_port }}/{{ ceilometer_db_name }}"
 
-
 # Glance configuration
-glance_db_password: "GLANCE_PASS"
-glance_service_password: "GLANCE_PASS"
 glance_api_host: "controller"
 glance_endpoint_id: "http://controller:9292"
-glance_password: "GLANCE_PASS"
-
-gnocchi_db_pass: "GNOCCHI_PASS"
-gnocchi_service_pass: "GNOCCHI_PASS"
-gnocchi_service_password: "GNOCCHI_PASS"
-
-ceilometer_pass:   CEILOMETER_PASSWORD
 
 metadata_proxy_shared_secret: "METADATA_SECRET"
 auth_url: "http://controller:5000"
