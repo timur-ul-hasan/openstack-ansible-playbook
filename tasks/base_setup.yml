@@ -1,8 +1,27 @@
 ---
+- name: Install chrony for time sync
+  apt:
+    name: chrony
+    state: present
+    update_cache: yes
+
+- name: Ensure chrony is running
+  service:
+    name: chrony
+    state: started
+    enabled: true
+
+- name: Wait for chrony to sync the clock
+  command: chronyc waitsync 30
+  register: waitsync
+  until: waitsync.rc == 0
+  retries: 5
+  delay: 10
+
 - name: Update APT package index
   apt:
     update_cache: yes
-    cache_valid_time: 36000
+    cache_valid_time: 1000000
 
 - name: Install core packages (system essentials and tools)
   apt:
@@ -75,6 +94,13 @@
     name: PyMySQL
     executable: pip3
   become: true
+
+- name: Ensure openstacksdk ≥ 1.0 is installed
+  become: true
+  ansible.builtin.pip:
+    name: openstacksdk>=1.0.0
+    executable: pip3
+    state: latest
 
 - name: Install virtualenv locally for the non-root user
   ansible.builtin.pip:

@@ -30,8 +30,6 @@
     - { host: "%",         db: "nova_cell0" }
   tags: db
 
-
-
 - name: Ensure Nova user exists
   ansible.builtin.shell: |
     . /root/admin-openrc
@@ -64,18 +62,29 @@
   tags: keystone
 
 
-- name: Register Nova and Placement in Keystone
+- name: Create Nova endpoints
   ansible.builtin.shell: |
     set -e
     . /root/admin-openrc
 
-    # Placement endpoints
     for iface in public internal admin; do
-      openstack endpoint create --region RegionOne placement $iface http://controller:8778
+      openstack endpoint create --region RegionOne compute $iface http://controller:8774/v2.1
     done
   args:
     executable: /bin/bash
   tags: keystone 
+
+
+- name: Ensure Nova user exists
+  ansible.builtin.shell: |
+    . /root/admin-openrc
+    openstack user show placement >/dev/null 2>&1 \
+      || openstack user create --domain default \
+          --password {{ placement_service_password }} placement
+  args:
+    executable: /bin/bash
+  tags: keystone
+
 
 - name: Install Nova controller packages
   apt:
@@ -195,7 +204,7 @@
     - { option: user_domain_name,   value: Default }
     - { option: auth_url,           value: "http://controller:5000/v3" }
     - { option: username,           value: placement }
-    - { option: password,           value: "{{ placement_pass }}" }
+    - { option: password,           value: "{{ placement_service_password }}" }
   tags: config 
 
 
@@ -220,6 +229,7 @@
   ansible.builtin.command: >
     su -s /bin/sh -c "nova-manage api_db sync" nova
   tags: dbsync  
+  
 
 - name: Map cell0
   ansible.builtin.command: >

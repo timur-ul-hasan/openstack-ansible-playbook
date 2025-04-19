@@ -259,12 +259,12 @@
     value: "{{ glance_public_endpoint_id }}"
     backup: yes
 
-- name: Enable per-tenant quotas in glance-api.conf
+- name: Configure Glance oslo_limit region name
   ansible.builtin.ini_file:
     path: /etc/glance/glance-api.conf
-    section: DEFAULT
-    option: use_keystone_limits
-    value: "True"
+    section: oslo_limit
+    option: region_name
+    value: "RegionOne"
     backup: yes
 
 - name: Populate the Glance database

@@ -11,12 +11,12 @@
     - openstack.cloud
 
   tasks:
-    - name: Ensure openstacksdk ≥ 1.0 is installed
-      become: yes
-      ansible.builtin.pip:
-        name: openstacksdk>=1.0.0
-        executable: pip3
-        state: latest
+    - block:
+        - name: Include base setup tasks
+          import_tasks: tasks/base_setup.yml
+      rescue:
+        - debug:
+            msg: "Base setup tasks failed, continuing with the rest of the playbook."
 
     - block:
         - name: Setup Keystone

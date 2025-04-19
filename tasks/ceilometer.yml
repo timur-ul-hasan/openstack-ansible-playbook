@@ -262,15 +262,6 @@
     path: /var/lib/gnocchi/.gnocchi_upgraded
     state: touch
 
-- name: Run ceilometer-upgrade under admin context
-  ansible.builtin.shell: |
-    source /root/admin-openrc
-    ceilometer-upgrade
-  args:
-    creates: /var/lib/ceilometer/.ceilometer_upgraded
-    executable: /bin/bash
-  become: true
-
 - name: Restart ceilometer-agent-central
   ansible.builtin.service:
     name: ceilometer-agent-central

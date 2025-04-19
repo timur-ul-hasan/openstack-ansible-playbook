@@ -51,78 +51,89 @@ sudo swapoff -a && sudo sed -i '/ swap / s/^/#/' /etc/fstab
 
 5. Disable the firewall (optional for testing):
 
-```bash
-sudo ufw disable
-```
+   ```bash
+   sudo ufw disable
+   ```
 
 6. Ensure the system is updated:
 
-```bash
-sudo apt update && sudo apt upgrade -y
-```
+   ```bash
+   sudo apt update && sudo apt upgrade -y
+   ```
 
-## Client Setup
+## Client Setup [Ansible Playbook for OpenStack Setup]
 
-## Ansible Playbook for OpenStack Setup 
 ### Software Requirements
 
 ● OpenStack Release: Train or later
 
 ● Ansible: Version 2.9 or later
 
-● Python: Version 3.6 or later
+● Python: Version 3.10 or later
 
+## Steps
 
-- Steps:
+1. Create a virtual environment (optional but recommended):
 
-1. Make sure you have Python 3.10 or higher installed on your system.
+   ```bash
+   python3 -m venv openstack_env
+   source openstack_env/bin/activate
+   ```
 
-2. Create a virtual environment (optional but recommended):
-```bash
-python3 -m venv openstack_env
-source openstack_env/bin/activate
-```
+2. Clone the repository:
+
+   ```bash
+   git clone <repository-url>
+   ```
+
 3. Install Ansible:
-```bash
-pip install ansible
-```
-4. Clone the repository:
-```bash
-git clone <repository-url>
-```
-5. Navigate to the cloned directory:
-```bash
-cd openstack-playbook
-```
-6. Install required Ansible collections:
-```bash
-ansible-galaxy collection install -r requirements.yml
-```
-7. Install required Ansible roles:
-```bash
-ansible-galaxy install -r requirements.yml
-```
-8. Create an inventory file (`inventory.ini`) with the following content:
-```ini
-[controller]
-controller ansible_host=<controller_ip> ansible_user=<ssh_user>
-[compute]
-```
 
-### Run for the Vagrant VM:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-```bash
-ansible-playbook -i inventory.ini setup_openstack.yml
-```
+4. Navigate to the cloned directory:
 
-### For password based authentication, you can use the `--ask-pass` option (Not recommended for production).
+   ```bash
+   cd openstack-playbook
+   ```
 
-```bash
-ansible-playbook -i inventory.ini setup_openstack.yml --ask-pass --ask-become-pass
-```
+5. Install required Ansible collections:
 
-### For SSH key based authentication, you can use the `--private-key` option.
+   ```bash
+   ansible-galaxy collection install -r requirements.yml
+   ```
 
-```bash
-ansible-playbook -i inventory.ini setup_openstack.yml --private-key /path/to/your/private/key
-```
+6. Install required Ansible roles:
+
+   ```bash
+   ansible-galaxy install -r requirements.yml
+   ```
+
+7. Copy the `inventory.ini.example` file to `inventory.ini` and edit it to include the IP addresses of your controller and compute nodes:
+
+   ```bash
+   cp inventory.ini.example inventory.ini
+   nano inventory.ini
+   # Change the IP addresses & passwords as per your setup
+   ```
+
+8. Run the Ansible playbook to set up OpenStack [‼️Make sure you have SSH access to the server.]:
+
+   ```bash
+   ansible-playbook -i inventory.ini setup_openstack.yml
+
+
+   # For the password based authentication, you can use the `--ask-pass` option (Not recommended for production)
+   ansible-playbook -i inventory.ini setup_openstack.yml --ask-pass --ask-become-pass
+   ```
+
+9. After the playbook completes, verify the installation by checking the OpenStack services:
+
+   ```bash
+   openstack service list
+   ```
+
+10. If everything is set up correctly, you should see a list of OpenStack services running.
+
+11. To access the OpenStack dashboard, open a web browser and navigate to `http://<controller-ip>/`. Log in using the admin credentials you set up during the playbook execution.

@@ -198,7 +198,6 @@
     ovs-vsctl --may-exist add-br {{ provider_bridge_name }}
     ovs-vsctl --may-exist add-port {{ provider_bridge_name }} {{ provider_interface_name }}
 
-
 - name: Restart Apache2
   service:
     name: apache2
