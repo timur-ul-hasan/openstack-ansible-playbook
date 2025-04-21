@@ -31,6 +31,8 @@ trove_project_domain: default
 trove_region_name: RegionOne
 trove_conf_path: /etc/trove/trove.conf
 trove_folder: python-troveclient
+trove_password: "{{ trove_password }}"
+
 
 # Nova configuration
 nova_api_host: "controller"    

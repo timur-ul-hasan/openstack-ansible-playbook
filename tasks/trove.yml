@@ -83,7 +83,7 @@
 - name: Create trove user in service project
   ansible.builtin.shell: |
     source /root/admin-openrc
-    openstack user create trove --project service --password 'MySecureTrovePass'
+    openstack user create trove --project service --password {{ trove_password }}
   args:
     executable: /bin/bash
   when: trove_user_check.rc != 0

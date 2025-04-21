@@ -117,7 +117,7 @@
     - { option: user_domain_name,     value: Default   }
     - { option: auth_url,             value: http://controller:5000/v3 }
     - { option: username,             value: placement }
-    - { option: password,             value: "{{ placement_pass }}" }
+    - { option: password,             value: "{{ placement_service_password }}" }
 
 - name: Check for CPU hardware acceleration
   ansible.builtin.command: egrep -c '(vmx|svm)' /proc/cpuinfo
