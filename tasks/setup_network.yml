@@ -1,0 +1,83 @@
+---
+- name: Ensure “provider” network is present
+  openstack.cloud.network:
+    name: provider
+    state: present
+    shared: true
+    external: true
+    provider_network_type: flat
+    provider_physical_network: provider
+  register: provider_net
+
+- name: Build list of usable IPs in the provider network
+  set_fact:
+    provider_hosts: "{{ provider_network_cidr | ipaddr('hosts') }}"
+
+- name: Define derived network parameters
+  set_fact:
+    provider_gateway: "{{ provider_hosts[0] }}"
+    dns_resolver: "{{ lookup('ansible.builtin.file', '/etc/resolv.conf')     | regex_search('nameserver\\s+(\\S+)', '\\1') }}"
+    alloc_start: "{{ provider_hosts[100] }}"
+    alloc_end: "{{ provider_hosts[-1] }}"
+
+- name: Ensure provider subnet exists
+  openstack.cloud.subnet:
+    network: provider
+    name: provider
+    cidr: "{{ provider_network_cidr }}"
+    gateway_ip: "{{ provider_gateway }}"
+    dns_nameservers:
+      - "{{ dns_resolver }}"
+    allocation_pools:
+      - start: "{{ alloc_start }}"
+        end: "{{ alloc_end }}"
+    state: present
+  register: provider_subnet
+
+# openstack network create selfservice
+
+- name: Ensure “selfservice” network is present
+  openstack.cloud.network:
+    name: selfservice
+    state: present
+    shared: false
+    external: false
+  register: selfservice_net
+
+- name: Ensure selfservice subnet exists
+  openstack.cloud.subnet:
+    network: selfservice
+    name: selfservice
+    cidr: "{{ selfservice_network_cidr }}"
+    gateway_ip: "{{ selfservice_gateway }}"
+    dns_nameservers:
+      - "{{ dns_resolver }}"
+    allocation_pools:
+      - start: "{{ selfservice_alloc_start }}"
+        end: "{{ selfservice_alloc_end }}"
+    state: present
+  register: selfservice_subnet
+  tags: network
+  when: selfservice_network_cidr is defined
+
+- name: Ensure router exists
+  openstack.cloud.router:
+    name: router
+    state: present
+    external_gateway: provider
+  register: router
+
+- name: Ensure router is connected to selfservice subnet
+  openstack.cloud.router_interface:
+    router: router
+    subnet: selfservice
+    state: present
+  register: router_interface
+
+- name: Ensure router is connected to provider network
+  openstack.cloud.router:
+    name: router
+    external_gateway: provider
+  register: router_external
+  when: provider_net.changed or provider_subnet.changed or router_interface.changed
+  tags: network

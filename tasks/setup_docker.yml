@@ -1,0 +1,74 @@
+---
+- name: Install required apt dependencies
+  apt:
+    name:
+      - ca-certificates
+      - curl
+      - software-properties-common
+      - gnupg
+      - lsb-release
+      - apt-transport-https
+    state: present
+    update_cache: yes
+
+- name: Create Docker keyrings directory
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Download Docker GPG key and convert to GPG keyring
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /usr/share/keyrings/docker-archive-keyring.gpg
+    mode: '0644'
+  register: docker_gpg_download
+
+- name: Convert Docker GPG key to binary format (dearmor)
+  ansible.builtin.command:
+    cmd: gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+    stdin: "{{ lookup('file', '/usr/share/keyrings/docker-archive-keyring.gpg') }}"
+  when: docker_gpg_download.changed
+  become: true
+
+- name: Add Docker APT repository
+  ansible.builtin.shell:
+    cmd: |
+      echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+
+
+- name: Apt cache policy for docker-ce
+  command: apt-cache policy docker-ce
+  register: docker_ce_policy
+
+- name: Install Docker engine and CLI
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+
+- name: Ensure docker group exists
+  group:
+    name: docker
+    state: present
+
+- name: Add current user to docker group
+  user:
+    name: "{{ ansible_user }}"
+    groups: docker
+    append: yes
+  when: ansible_user != "root"
+
+- name: Enable and start Docker service
+  systemd:
+    name: docker
+    enabled: true
+    state: started
